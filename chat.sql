@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Aug 08, 2025 at 02:33 PM
+-- Generation Time: Aug 08, 2025 at 03:23 PM
 -- Server version: 8.0.30
 -- PHP Version: 8.1.10
 
@@ -151,6 +151,7 @@ CREATE TABLE `users` (
   `id` bigint UNSIGNED NOT NULL,
   `name` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `email` varchar(150) COLLATE utf8mb4_general_ci NOT NULL,
+  `username` varchar(50) COLLATE utf8mb4_general_ci NOT NULL,
   `password` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
   `avatar_url` text COLLATE utf8mb4_general_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,

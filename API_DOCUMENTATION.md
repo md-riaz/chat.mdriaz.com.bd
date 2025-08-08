@@ -1,0 +1,539 @@
+# Chat System REST API Documentation
+
+## Base URL
+
+```
+https://yourdomain.com/api/
+```
+
+## Authentication
+
+All API endpoints (except auth endpoints) require Bearer token authentication.
+
+### Headers
+
+```
+Authorization: Bearer {your_access_token}
+Content-Type: application/json
+```
+
+---
+
+## Authentication Endpoints
+
+### POST /api/auth/login
+
+Login user and get access token.
+
+**Request Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "device_id": "device_123",
+  "platform": "android",
+  "fcm_token": "fcm_token_here"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "access_token_here",
+    "user": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "user@example.com",
+      "username": "johndoe",
+      "avatar_url": "/uploads/avatars/avatar.jpg"
+    }
+  }
+}
+```
+
+### POST /api/auth/register
+
+Register a new user.
+
+**Request Body:**
+
+```json
+{
+  "name": "John Doe",
+  "email": "user@example.com",
+  "username": "johndoe",
+  "password": "password123",
+  "avatar_url": "/uploads/avatars/avatar.jpg"
+}
+```
+
+### POST /api/auth/logout
+
+Logout and revoke access token.
+
+### POST /api/auth/refresh
+
+Refresh access token.
+
+### GET /api/auth/me
+
+Get current authenticated user information.
+
+---
+
+## User Management Endpoints
+
+### GET /api/user
+
+Get list of users with pagination and search.
+
+**Query Parameters:**
+
+- `page` (int): Page number (default: 1)
+- `per_page` (int): Items per page (default: 20, max: 100)
+- `search` (string): Search query for name, email, or username
+
+### GET /api/user/{id}
+
+Get specific user by ID.
+
+### PUT /api/user/{id}
+
+Update user profile.
+
+**Request Body:**
+
+```json
+{
+  "name": "Updated Name",
+  "username": "newusername",
+  "avatar_url": "/uploads/avatars/new_avatar.jpg"
+}
+```
+
+### DELETE /api/user/{id}
+
+Soft delete user account.
+
+### POST /api/user/{id}/upload-avatar
+
+Upload user avatar image.
+
+**Form Data:**
+
+- `avatar`: Image file (JPEG, PNG, GIF, WebP, max 5MB)
+
+### GET /api/user/search
+
+Search users for adding to conversations.
+
+**Query Parameters:**
+
+- `q` (string): Search query
+- `limit` (int): Max results (default: 10, max: 50)
+
+### GET /api/user/me
+
+Get current user profile.
+
+---
+
+## Conversation Management Endpoints
+
+### GET /api/conversation
+
+Get user's conversations with pagination.
+
+**Query Parameters:**
+
+- `page` (int): Page number
+- `per_page` (int): Items per page
+
+### POST /api/conversation
+
+Create a new conversation.
+
+**Request Body (Direct Conversation):**
+
+```json
+{
+  "type": "direct",
+  "participant_id": 2
+}
+```
+
+**Request Body (Group Conversation):**
+
+```json
+{
+  "type": "group",
+  "name": "Project Team",
+  "description": "Discussion for the new project",
+  "participant_ids": [2, 3, 4]
+}
+```
+
+### GET /api/conversation/{id}
+
+Get conversation details.
+
+### PUT /api/conversation/{id}
+
+Update conversation details (admin only).
+
+**Request Body:**
+
+```json
+{
+  "name": "Updated Group Name",
+  "description": "Updated description"
+}
+```
+
+### DELETE /api/conversation/{id}
+
+Delete conversation (admin only).
+
+### GET /api/conversation/{id}/participants
+
+Get conversation participants.
+
+### POST /api/conversation/{id}/add-participants
+
+Add participants to conversation (admin only).
+
+**Request Body:**
+
+```json
+{
+  "user_ids": [5, 6, 7]
+}
+```
+
+### POST /api/conversation/{id}/remove-participant
+
+Remove participant from conversation.
+
+**Request Body:**
+
+```json
+{
+  "user_id": 5
+}
+```
+
+### POST /api/conversation/{id}/mark-read
+
+Mark conversation as read.
+
+---
+
+## Message Management Endpoints
+
+### GET /api/message
+
+Get messages for a conversation.
+
+**Query Parameters:**
+
+- `conversation_id` (int): Required
+- `page` (int): Page number
+- `per_page` (int): Items per page (max: 100)
+- `search` (string): Search within messages
+
+### POST /api/message
+
+Send a new message.
+
+**Request Body:**
+
+```json
+{
+  "conversation_id": 1,
+  "content": "Hello everyone!",
+  "message_type": "text",
+  "parent_id": null,
+  "mentions": [2, 3],
+  "attachments": [
+    {
+      "file_url": "/uploads/messages/file.pdf",
+      "file_type": "application/pdf",
+      "file_size": 102400,
+      "original_name": "document.pdf"
+    }
+  ]
+}
+```
+
+### GET /api/message/{id}
+
+Get specific message details.
+
+### PUT /api/message/{id}
+
+Edit a message (sender only).
+
+**Request Body:**
+
+```json
+{
+  "content": "Updated message content"
+}
+```
+
+### DELETE /api/message/{id}
+
+Delete a message (sender only).
+
+### POST /api/message/{id}/reaction
+
+Add/remove reaction to a message.
+
+**Request Body:**
+
+```json
+{
+  "emoji": "👍"
+}
+```
+
+### POST /api/message/{id}/mark-read
+
+Mark message as read.
+
+### POST /api/message/upload
+
+Upload file for message attachment.
+
+**Form Data:**
+
+- `file`: File to upload (max 50MB)
+
+### GET /api/message/search
+
+Search messages across all conversations.
+
+**Query Parameters:**
+
+- `q` (string): Search query
+- `page` (int): Page number
+- `per_page` (int): Items per page
+
+---
+
+## Chat Endpoints (Simplified)
+
+### GET /api/chat/conversations
+
+Get user's conversations.
+
+### POST /api/chat/send-message
+
+Send a message.
+
+**Request Body:**
+
+```json
+{
+  "conversation_id": 1,
+  "content": "Hello!",
+  "message_type": "text",
+  "mentions": [2]
+}
+```
+
+### GET /api/chat/messages
+
+Get messages for conversation.
+
+**Query Parameters:**
+
+- `conversation_id` (int): Required
+- `limit` (int): Max messages
+- `offset` (int): Skip messages
+
+### POST /api/chat/create-conversation
+
+Create new conversation.
+
+### POST /api/chat/add-reaction
+
+Add reaction to message.
+
+### POST /api/chat/mark-as-read
+
+Mark message as read.
+
+### GET /api/chat/search-messages
+
+Search messages.
+
+### GET /api/chat/unread-count
+
+Get unread message count.
+
+### GET /api/chat/typing-status
+
+Get typing status for conversation.
+
+### POST /api/chat/set-typing
+
+Set typing status.
+
+### GET /api/chat/online-users
+
+Get online users.
+
+---
+
+## Device Management Endpoints
+
+### POST /api/device/register
+
+Register device for push notifications.
+
+**Request Body:**
+
+```json
+{
+  "device_id": "device_123",
+  "platform": "android",
+  "fcm_token": "fcm_token_here",
+  "app_version": "1.0.0",
+  "device_name": "Samsung Galaxy S21",
+  "os_version": "Android 11"
+}
+```
+
+### GET /api/device
+
+Get user's registered devices.
+
+### PUT /api/device/{deviceId}
+
+Update device information.
+
+### DELETE /api/device/{deviceId}
+
+Unregister device.
+
+### POST /api/device/{deviceId}/ping
+
+Update device last active timestamp.
+
+### POST /api/device/test-notification
+
+Send test push notification.
+
+---
+
+## Status Endpoints
+
+### GET /api/status
+
+API health check.
+
+### GET /api/status/auth
+
+Check authentication status.
+
+### GET /api/status/database
+
+Check database connection.
+
+### GET /api/status/websocket
+
+Check WebSocket server status.
+
+---
+
+## Response Format
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "message": "Operation successful",
+  "data": {
+    // Response data here
+  }
+}
+```
+
+### Paginated Response
+
+```json
+{
+  "success": true,
+  "message": "Data retrieved successfully",
+  "data": {
+    "items": [
+      // Array of items
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 100,
+      "total_pages": 5,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "message": "Error message",
+  "errors": {
+    // Optional detailed errors
+  }
+}
+```
+
+---
+
+## HTTP Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `500` - Internal Server Error
+
+---
+
+## WebSocket Integration
+
+The chat system also includes a WebSocket server for real-time messaging. WebSocket events include:
+
+- **auth** - Authenticate WebSocket connection
+- **message** - Send/receive messages
+- **typing** - Typing indicators
+- **reaction** - Message reactions
+- **user_status** - User online/offline status
+
+WebSocket server runs on `ws://localhost:8080` (configurable).
+
+---
+
+## Flutter Integration Notes
+
+1. Use `dio` package for HTTP requests
+2. Implement Bearer token authentication
+3. Handle pagination for large data sets
+4. Implement file upload for avatars and attachments
+5. Use WebSocket for real-time features
+6. Store auth token securely using `flutter_secure_storage`
+7. Implement proper error handling for all API responses

@@ -2,98 +2,36 @@
 
 namespace Framework\Core;
 
-use App\Enum\SystemParty;
-use App\Enum\Status;
-use Framework\Core\Database;
+use Framework\Core\DBManager;
 
 class Auth
 {
-
-    public static $ownerId;
-
-    public static $partyId;
-
+    public static $userId;
     public static $name;
-
-    public static $ownerType;
-
-    public static $partyRoleIds;
-
-    public static $session_id;
-
+    public static $email;
+    public static $username;
+    public static $sessionId;
     public static $token;
-
     public static $authType;
 
-    private static $db;
-
-
+    /**
+     * Simple permission check for chat system
+     * In chat context, users can access their own data and conversations they participate in
+     */
     public static function checkPermission($section, $controller, $action)
     {
+        // For chat system, we use simple ownership-based permissions
+        // More complex permissions can be added later if needed
 
-        self::$db = new Database;
-
-        //Check Permission
-
-        $resource = $section . $controller;
-
-        $checkResource = self::$db->query(
-            " SELECT ar.id, pd.effect, pd.action
-                                            FROM access_resource AS ar
-                                            JOIN policy_resource AS pr ON pr.resource_id = ar.id 
-                                            JOIN policy_definition AS pd ON pd.id = pr.definition_id
-                                            JOIN role_policy AS rp ON rp.policy_id = pd.policy_id
-                                            WHERE ar.resource = ? AND LOWER(pd.action) = ?",
-            [$resource, strtolower($action)]
-        )->fetchArray();
-
-        if (!empty($checkResource)) {
-
-            if (!self::authorized()) {
-                echo json_encode(['error' => 405, 'msg' => 'Authorization required']);
-                exit();
-            }
-
-            $ids = implode(',', self::$partyRoleIds);
-
-            $action = strtolower($action);
-
-            $all_roles_policy = self::$db->query(" WITH RECURSIVE role_hierarchy AS (
-                                        SELECT id, name
-                                        FROM role
-                                        WHERE id IN ($ids)
-                                    
-                                        UNION ALL
-
-                                        SELECT r.id, r.name
-                                        FROM role r
-                                        INNER JOIN role_hierarchy rh ON r.parent_id = rh.id
-                                        )
-                                        SELECT rh.id AS role_id, pd.effect
-                                        FROM role_hierarchy AS rh
-                                        JOIN role_policy AS rp ON rp.role_id = rh.id
-                                        JOIN policy_definition AS pd ON pd.policy_id = rp.policy_id
-                                        JOIN policy_resource AS pr ON pr.definition_id = pd.id
-                                        WHERE pr.resource_id = {$checkResource['id']} AND LOWER(pd.action) = '{$action}'")->fetchAll();
-
-            foreach ($all_roles_policy as $role_policy) {
-
-                if ($role_policy['effect'] == 1) {
-
-                    foreach ($all_roles_policy as $inner_policy) {
-                        if (($inner_policy['role_id'] === self::$partyRoleIds[0]) && ($inner_policy['effect'] == 0)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-            }
-
-            return false;
+        $user = self::currentUser();
+        if (!$user) {
+            http_response_code(401);
+            echo json_encode(['error' => 401, 'msg' => 'Authentication required']);
+            exit();
         }
 
-        self::$db->close();
-
+        // Basic permission check - users can access their own resources
+        // Specific resource-level permissions are handled in individual controllers
         return true;
     }
 
@@ -104,13 +42,79 @@ class Auth
             return self::authorizeWithToken($token);
         }
 
-        $apiKey = self::getApiKeyFromRequest();
+        return false;
+    }
 
-        if ($apiKey) {
-            return self::authorizeWithApiKey($apiKey);
+    /**
+     * Public helper to get the current authenticated user from Bearer token.
+     * Returns an associative array with keys: user_id, name, email, username, session_id, token
+     * or null if not authenticated.
+     */
+    public static function currentUser(): ?array
+    {
+        $db = DBManager::getDB();
+
+        $token = null;
+        // Try common Authorization headers (case-insensitive)
+        $headers = function_exists('getallheaders') ? getallheaders() : [];
+        foreach (
+            [
+                'Authorization',
+                'authorization',
+                'AUTHORIZATION'
+            ] as $h
+        ) {
+            if (!empty($headers[$h])) {
+                if (preg_match('/Bearer\s+(.*)$/i', $headers[$h], $m)) {
+                    $token = $m[1];
+                    break;
+                }
+            }
+        }
+        // Fallback to server var
+        if (!$token) {
+            $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+            if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $m)) {
+                $token = $m[1];
+            }
         }
 
-        return false;
+        if (!$token) {
+            return null;
+        }
+
+        // Query auth_tokens table as per the current schema
+        $userQuery = $db->query(
+            "SELECT u.id, u.name, u.email, u.username, at.id as session_id
+             FROM auth_tokens at
+             JOIN users u ON u.id = at.user_id
+             WHERE at.token = ?
+             AND at.revoked_at IS NULL
+             AND (at.expires_at IS NULL OR at.expires_at > NOW())",
+            [$token]
+        );
+
+        if (!empty($userQuery) && $userQuery->numRows() > 0) {
+            $uinfo = $userQuery->fetchArray();
+            self::$sessionId = $uinfo['session_id'];
+            self::$token = $token;
+            self::$userId = $uinfo['id'];
+            self::$name = $uinfo['name'];
+            self::$email = $uinfo['email'];
+            self::$username = $uinfo['username'];
+            self::$authType = 'token';
+
+            return [
+                'user_id' => $uinfo['id'],
+                'name' => $uinfo['name'],
+                'email' => $uinfo['email'],
+                'username' => $uinfo['username'],
+                'session_id' => $uinfo['session_id'],
+                'token' => $token,
+            ];
+        }
+
+        return null;
     }
 
     private static function getTokenFromAuthorizationHeader()
@@ -119,103 +123,80 @@ class Auth
         return $authToken[1] ?? null;
     }
 
-    private static function getApiKeyFromRequest()
-    {
-        $jsonToken = json_decode((file_get_contents('php://input') ?? '{}'), true);
-        return $_REQUEST['api_key'] ?? $jsonToken['api_key'] ?? null;
-    }
-
     private static function authorizeWithToken($token)
     {
-        $origin = isset($_SERVER['HTTP_ORIGIN']) ? parse_url($_SERVER['HTTP_ORIGIN'], PHP_URL_HOST) : '';
-        $timeout = date("Y-m-d H:i:s", strtotime(TOKEN_EXPIRATION ?? ''));
-        $timeout5min = date("Y-m-d H:i:s", strtotime('-5 minutes'));
+        $db = DBManager::getDB();
 
-        $userQuery = self::$db->query(
-            "SELECT s.id AS session_id, p.id, p.name, s.organization_id AS owner_id
-                FROM `token` AS s
-                JOIN login AS l ON l.id = s.login_id
-                JOIN party AS p ON p.id = l.party_id AND p.status = ?
-                WHERE s.token = ? AND s.expire = 0 
-                    AND (
-                        (s.type = 'login' AND (s.created > ? OR s.last_activity > ?)) 
-                        OR 
-                        (s.type = 'admin_login' AND (s.created > ? OR s.last_activity > ?))
-                    )
-                    AND origin = ?",
-            Status::ACTIVE->value,
-            $token,
-            $timeout,
-            $timeout,
-            $timeout5min,
-            $timeout5min,
-            $origin
+        // Query auth_tokens table as per the current schema
+        $userQuery = $db->query(
+            "SELECT u.id, u.name, u.email, u.username, at.id as session_id
+             FROM auth_tokens at
+             JOIN users u ON u.id = at.user_id
+             WHERE at.token = ? 
+             AND at.revoked_at IS NULL 
+             AND (at.expires_at IS NULL OR at.expires_at > NOW())",
+            [$token]
         );
-
 
         if (!empty($userQuery) && $userQuery->numRows() > 0) {
             $uinfo = $userQuery->fetchArray();
-            self::$db->query("UPDATE token SET last_activity=? WHERE id = ?", TIMESTAMP, $uinfo['session_id']);
-            self::$session_id = $uinfo['session_id'];
+            self::$sessionId = $uinfo['session_id'];
             self::$token = $token;
-
-            // Retrieve party role ids and other necessary data
-            self::retrievePartyData($uinfo);
-
+            self::$userId = $uinfo['id'];
+            self::$name = $uinfo['name'];
+            self::$email = $uinfo['email'];
+            self::$username = $uinfo['username'];
             self::$authType = 'token';
-
             return true;
         }
 
         return false;
     }
 
-    private static function authorizeWithApiKey($apiKey)
+    /**
+     * Get current user ID
+     */
+    public static function getCurrentUserId(): ?int
     {
-
-        $userQuery = self::$db->query(
-            "SELECT p.id, p.name, p.parent AS owner_id 
-                FROM api_key AS apiKey 
-                JOIN party AS p ON p.id = apiKey.party_id
-                WHERE apiKey.`key` = ? AND p.status = ?
-                ",
-            [$apiKey, Status::ACTIVE->value]
-        );
-
-        if (!empty($userQuery) && $userQuery->numRows() > 0) {
-
-            $uinfo = $userQuery->fetchArray();
-
-            // update last used api key
-            self::$db->query("UPDATE api_key SET last_used = ? WHERE `key` = ?", TIMESTAMP, $apiKey);
-
-            $orgQuery = self::$db->query("SELECT id FROM party WHERE id = ? AND status = ?", [$uinfo['owner_id'], Status::ACTIVE->value]);
-
-            if ($orgQuery->numRows() < 1) {
-                return false;
-            }
-
-            // Retrieve party role ids and other necessary data
-            self::retrievePartyData($uinfo);
-
-            self::$authType = 'api_key';
-
-            return true;
-        }
-
-        return false;
+        $user = self::currentUser();
+        return $user ? (int)$user['user_id'] : null;
     }
 
-    private static function retrievePartyData($uinfo)
+    /**
+     * Check if user is authenticated
+     */
+    public static function isAuthenticated(): bool
     {
-        self::$partyId = $uinfo['id'];
-        self::$name = $uinfo['name'];
-        self::$ownerId =   (empty($uinfo['owner_id']) || $uinfo['owner_id'] == SystemParty::IPBXManagement->value) ? $uinfo['id'] : $uinfo['owner_id'];
-        self::$ownerType = (empty($uinfo['owner_id']) || $uinfo['owner_id'] == SystemParty::IPBXManagement->value) ? 'Individual' : 'Organization';
+        return self::currentUser() !== null;
+    }
 
-        self::$partyRoleIds = array_column(
-            self::$db->query("SELECT role_id FROM party_role WHERE party_id = ? AND organization_id = ? AND status = ? ORDER BY role_id", [$uinfo['id'], self::$ownerId, Status::ACTIVE->value])->fetchAll(),
-            'role_id'
+    /**
+     * Check if current user owns a resource
+     */
+    public static function ownsResource(int $userId): bool
+    {
+        $currentUserId = self::getCurrentUserId();
+        return $currentUserId && $currentUserId === $userId;
+    }
+
+    /**
+     * Check if current user participates in a conversation
+     */
+    public static function participatesInConversation(int $conversationId): bool
+    {
+        $currentUserId = self::getCurrentUserId();
+        if (!$currentUserId) {
+            return false;
+        }
+
+        $db = DBManager::getDB();
+        $result = $db->query(
+            "SELECT COUNT(*) as count FROM conversation_participants 
+             WHERE conversation_id = ? AND user_id = ?",
+            [$conversationId, $currentUserId]
         );
+
+        $row = $result->fetchArray();
+        return $row && $row['count'] > 0;
     }
 }
