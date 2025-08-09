@@ -59,7 +59,7 @@ class Database
         $start = ($page == 0 ? 0 : ($page - 1) * $limit);
         $page_num = ($page == 0 ? 1 : $page);
 
-        $sql = "$query OFFSET $start LIMIT $limit";
+        $sql = "$query LIMIT $limit OFFSET $start";
 
         if (empty($values)) {
 
