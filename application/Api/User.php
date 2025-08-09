@@ -284,8 +284,8 @@ class User extends ApiController
                 $data['device_id'],
                 $data['platform'] ?? 'web',
                 $data['fcm_token'] ?? null,
-                $data['app_version'] ?? null,
                 $data['device_name'] ?? null,
+                $data['app_version'] ?? null,
                 $data['os_version'] ?? null
             );
         }
