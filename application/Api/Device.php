@@ -24,8 +24,8 @@ class Device extends ApiController
                 $data['device_id'],
                 $data['platform'],
                 $data['fcm_token'] ?? null,
-                $data['app_version'] ?? null,
                 $data['device_name'] ?? null,
+                $data['app_version'] ?? null,
                 $data['os_version'] ?? null
             );
 
