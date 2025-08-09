@@ -270,6 +270,13 @@ Send a new message.
 }
 ```
 
+Each attachment object may include:
+
+- `file_url` (string): Required file location
+- `file_type` (string): Required MIME type
+- `file_size` (int, optional): Size in bytes
+- `original_name` (string, optional): Original filename
+
 ### GET /api/message/{id}
 
 Get specific message details.
@@ -313,6 +320,18 @@ Upload file for message attachment.
 **Form Data:**
 
 - `file`: File to upload (max 50MB)
+
+**Response:**
+
+```json
+{
+  "attachment_id": 1,
+  "file_url": "/uploads/messages/file.pdf",
+  "file_type": "application/pdf",
+  "file_size": 102400,
+  "original_name": "document.pdf"
+}
+```
 
 ### GET /api/message/search
 

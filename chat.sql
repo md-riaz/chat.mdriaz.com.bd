@@ -96,6 +96,7 @@ CREATE TABLE `message_attachments` (
   `uploader_id` bigint UNSIGNED NOT NULL,
   `file_url` text COLLATE utf8mb4_general_ci NOT NULL,
   `mime_type` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `original_name` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
   `size` bigint UNSIGNED DEFAULT NULL,
   `uploaded_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `linked` tinyint(1) DEFAULT '0'
