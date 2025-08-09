@@ -375,7 +375,8 @@ class Message extends ApiController
                     $user['user_id'],
                     $fileUrl,
                     $file['type'],
-                    $file['size']
+                    $file['size'],
+                    $file['name']
                 );
 
                 $this->respondSuccess([

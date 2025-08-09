@@ -19,32 +19,32 @@ class MessageAttachmentModel
     /**
      * Add attachment to a message (alias for createAttachment)
      */
-    public static function addAttachment($messageId, $fileUrl, $mimeType, $fileSize = null, $uploaderId = 1)
+    public static function addAttachment($messageId, $fileUrl, $mimeType, $fileSize = null, $originalName = null, $uploaderId = 1)
     {
-        return self::createAttachment($messageId, $uploaderId, $fileUrl, $mimeType, $fileSize);
+        return self::createAttachment($messageId, $uploaderId, $fileUrl, $mimeType, $fileSize, $originalName);
     }
 
-    public static function createAttachment($messageId, $uploaderId, $fileUrl, $mimeType = null, $size = null)
+    public static function createAttachment($messageId, $uploaderId, $fileUrl, $mimeType = null, $size = null, $originalName = null)
     {
         $db = self::initDB();
 
         $result = $db->query(
-            "INSERT INTO message_attachments (message_id, uploader_id, file_url, mime_type, size, uploaded_at, linked) 
-             VALUES (?, ?, ?, ?, ?, NOW(), 1)",
-            [$messageId, $uploaderId, $fileUrl, $mimeType, $size]
+            "INSERT INTO message_attachments (message_id, uploader_id, file_url, mime_type, size, original_name, uploaded_at, linked)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), 1)",
+            [$messageId, $uploaderId, $fileUrl, $mimeType, $size, $originalName]
         );
 
         return $db->lastInsertId();
     }
 
-    public static function createUnlinkedAttachment($uploaderId, $fileUrl, $mimeType = null, $size = null)
+    public static function createUnlinkedAttachment($uploaderId, $fileUrl, $mimeType = null, $size = null, $originalName = null)
     {
         $db = self::initDB();
 
         $result = $db->query(
-            "INSERT INTO message_attachments (uploader_id, file_url, mime_type, size, uploaded_at, linked) 
-             VALUES (?, ?, ?, ?, NOW(), 0)",
-            [$uploaderId, $fileUrl, $mimeType, $size]
+            "INSERT INTO message_attachments (uploader_id, file_url, mime_type, size, original_name, uploaded_at, linked)
+             VALUES (?, ?, ?, ?, ?, NOW(), 0)",
+            [$uploaderId, $fileUrl, $mimeType, $size, $originalName]
         );
 
         return $db->lastInsertId();
@@ -103,9 +103,10 @@ class MessageAttachmentModel
         $db = self::initDB();
 
         return $db->query(
-            "DELETE FROM message_attachments 
+            "DELETE FROM message_attachments
              WHERE linked = 0 AND uploaded_at < DATE_SUB(NOW(), INTERVAL ? HOUR)",
             [$olderThanHours]
         );
     }
 }
+
