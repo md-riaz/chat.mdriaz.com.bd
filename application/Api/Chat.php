@@ -76,6 +76,11 @@ class Chat extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
+        if (!ConversationParticipantModel::isParticipant($conversationId, $user['user_id'])) {
+            $this->respondError(403, 'User is not a participant of this conversation');
+            return;
+        }
+
         try {
             $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $offset);
 
