@@ -58,7 +58,7 @@ class ConversationModel
                 FROM conversations c
                 JOIN conversation_participants cp ON c.id = cp.conversation_id
                 WHERE cp.user_id = ?
-                ORDER BY last_message_time DESC NULLS LAST
+                ORDER BY last_message_time IS NULL, last_message_time DESC
                 LIMIT ? OFFSET ?";
 
         return $db->query($sql, [$userId, $limit, $offset])->fetchAll();
