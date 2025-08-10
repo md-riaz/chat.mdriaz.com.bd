@@ -52,6 +52,7 @@ The system uses the following core tables:
 
 - PHP 8.0 or higher
 - MySQL 8.0 or higher
+- Redis 6+ for caching and real-time features
 - Composer (for dependencies)
 
 ### Installation
@@ -71,13 +72,27 @@ The system uses the following core tables:
 
 3. **Configure the application**
 
-   - Update database configuration in `configuration/config.php`
+   - Copy `.env.local` and update values to match your environment (database, Redis, WebSocket, etc.)
+   - Alternatively update settings directly in `configuration/config.php`
    - Set up your domain and security settings
 
-4. **Start the WebSocket server** (for real-time features)
-   ```bash
-   php bin/chat-server.php
-   ```
+4. **Start supporting services**
+   - Make sure your Redis server is running
+   - Start the WebSocket server for real-time features
+     ```bash
+     php bin/chat-server.php
+     ```
+
+### Environment Variables
+
+Configuration values are loaded from `.env.local`. Important options include:
+
+- `APP_URL` – Base URL of the application
+- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_PORT` – Database settings
+- `REDIS_HOST`, `REDIS_PORT` – Redis connection for caching and presence
+- `WEBSOCKET_HOST`, `WEBSOCKET_PORT` – WebSocket server configuration
+- `ALLOWED_ORIGINS` – Allowed CORS origins
+- `PAGINATION_LIMIT` – Default items per page
 
 ### Basic Usage
 
@@ -287,7 +302,10 @@ All API responses follow this format:
 │   │   ├── MessageModel.php
 │   │   └── UserModel.php
 │   └── Services/
-│       └── ChatService.php  # Business logic service
+│       ├── ChatService.php   # Business logic service
+│       └── RedisService.php  # Redis helper utilities
+├── application/Jobs/         # Background jobs
+│   └── SendPushNotification.php
 ├── bin/                      # Command-line scripts
 │   └── chat-server.php      # WebSocket server
 ├── framework/                # Core framework

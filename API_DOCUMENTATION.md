@@ -6,6 +6,12 @@
 https://yourdomain.com/api/
 ```
 
+## Setup Requirements
+
+- Configure environment variables in `.env.local` (database, Redis, WebSocket)
+- Ensure MySQL and Redis servers are running
+- Start the WebSocket server with `php bin/chat-server.php` for real-time features
+
 ## Authentication
 
 All API endpoints (except auth endpoints) require Bearer token authentication.
