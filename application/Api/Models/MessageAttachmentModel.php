@@ -64,12 +64,12 @@ class MessageAttachmentModel extends Model
 
     public static function getMessageAttachments($messageId)
     {
-        $db = static::db();
-
-        return $db->query(
-            "SELECT * FROM message_attachments WHERE message_id = ? ORDER BY uploaded_at ASC",
-            [$messageId]
-        )->fetchAll();
+        $message = MessageModel::find((int) $messageId);
+        if (!$message) {
+            return [];
+        }
+        $attachments = $message->attachments;
+        return array_map(fn($a) => $a->toArray(), $attachments);
     }
 
     public static function getAttachmentById($attachmentId)
