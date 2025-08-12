@@ -21,6 +21,7 @@ abstract class Model
     // Current and original state for dirty checking
     protected array $attributes = [];
     protected array $original = [];
+    protected array $relations = [];
 
     public function __construct(array $attributes = [])
     {
@@ -35,7 +36,20 @@ abstract class Model
 
     public function __get(string $name): mixed
     {
-        return $this->attributes[$name] ?? null;
+        if (array_key_exists($name, $this->attributes)) {
+            return $this->attributes[$name];
+        }
+
+        if (array_key_exists($name, $this->relations)) {
+            return $this->relations[$name];
+        }
+
+        if (method_exists($this, $name)) {
+            $this->relations[$name] = $this->$name();
+            return $this->relations[$name];
+        }
+
+        return null;
     }
 
     public function __set(string $name, mixed $value): void
@@ -56,7 +70,69 @@ abstract class Model
 
     public function toArray(): array
     {
-        return $this->attributes;
+        $data = $this->attributes;
+
+        foreach ($this->relations as $key => $relation) {
+            if ($relation instanceof self) {
+                $data[$key] = $relation->toArray();
+            } elseif (is_array($relation)) {
+                $data[$key] = array_map(
+                    fn($item) => $item instanceof self ? $item->toArray() : $item,
+                    $relation
+                );
+            } else {
+                $data[$key] = $relation;
+            }
+
+            $foreignKey = $key . '_id';
+            if (array_key_exists($foreignKey, $data)) {
+                unset($data[$foreignKey]);
+            }
+        }
+
+        return $data;
+    }
+
+    public static function getPrimaryKey(): string
+    {
+        return static::$primaryKey;
+    }
+
+    protected function foreignKeyName(string $class): string
+    {
+        $base = basename(str_replace('\\', '/', $class));
+        $snake = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $base));
+        return $snake . '_id';
+    }
+
+    public function hasMany(string $related, ?string $foreignKey = null, ?string $localKey = null): array
+    {
+        $foreignKey = $foreignKey ?? $this->foreignKeyName(static::class);
+        $localKey = $localKey ?? static::$primaryKey;
+        $value = $this->attributes[$localKey] ?? null;
+        if ($value === null) {
+            return [];
+        }
+        /** @var class-string<Model> $related */
+        return $related::where([[$foreignKey, '=', $value]]);
+    }
+
+    public function hasOne(string $related, ?string $foreignKey = null, ?string $localKey = null): ?Model
+    {
+        $results = $this->hasMany($related, $foreignKey, $localKey);
+        return $results[0] ?? null;
+    }
+
+    public function belongsTo(string $related, ?string $foreignKey = null, ?string $ownerKey = null): ?Model
+    {
+        $foreignKey = $foreignKey ?? $this->foreignKeyName($related);
+        /** @var class-string<Model> $related */
+        $ownerKey = $ownerKey ?? $related::getPrimaryKey();
+        $value = $this->attributes[$foreignKey] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        return $related::first([[$ownerKey, '=', $value]]);
     }
 
     public static function all(): array

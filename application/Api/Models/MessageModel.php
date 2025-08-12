@@ -10,6 +10,16 @@ class MessageModel extends Model
     protected array $fillable = ['conversation_id', 'sender_id', 'content', 'message_type', 'parent_id', 'created_at'];
     protected bool $timestamps = false;
 
+    public function sender(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class, 'sender_id');
+    }
+
+    public function attachments(): array
+    {
+        return $this->hasMany(MessageAttachmentModel::class, 'message_id');
+    }
+
     public static function createMessage($conversationId, $senderId, $content, $messageType = 'text', $parentId = null)
     {
         $message = new static([
@@ -37,15 +47,16 @@ class MessageModel extends Model
      */
     public static function getMessageWithDetails($messageId)
     {
-        $db = static::db();
+        $message = static::find((int) $messageId);
+        if (!$message) {
+            return null;
+        }
 
-        return $db->query(
-            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar"
-            . " FROM messages m"
-            . " JOIN users u ON m.sender_id = u.id"
-            . " WHERE m.id = ?",
-            [$messageId]
-        )->fetchArray();
+        // Load desired relations
+        $message->sender;
+        $message->attachments;
+
+        return $message->toArray();
     }
 
     /**
