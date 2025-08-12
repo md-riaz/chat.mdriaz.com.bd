@@ -2,21 +2,12 @@
 
 namespace App\Api\Models;
 
-use Framework\Core\Database;
-use Framework\Core\DBManager;
-use Framework\Core\Auth;
+use Framework\Core\Model;
 
-class UserModel
+class UserModel extends Model
 {
-    private static $db;
-
-    public static function initDB()
-    {
-        if (!self::$db) {
-            self::$db = new Database();
-        }
-        return self::$db;
-    }
+    protected static string $table = 'users';
+    protected array $fillable = ['name', 'email', 'username', 'password', 'avatar_url', 'created_at', 'updated_at'];
 
     /**
      * Run a paginated user listing using Database::dataQuery
@@ -26,7 +17,7 @@ class UserModel
      */
     public static function GetUsers(string $baseQuery, array $params = []): array
     {
-        $db = self::initDB();
+        $db = static::db();
         return $db->dataQuery($baseQuery, $params);
     }
 
@@ -35,8 +26,7 @@ class UserModel
      */
     public static function findById($id)
     {
-        $db = self::initDB();
-        return $db->query("SELECT id, name, email, username, avatar_url, created_at, updated_at FROM users WHERE id = ?", [$id])->fetchArray();
+        return static::find((int) $id);
     }
 
     /**
@@ -44,18 +34,13 @@ class UserModel
      */
     public static function updateById($id, array $data)
     {
-        $db = self::initDB();
-        if (empty($data)) return false;
-
-        $set = [];
-        $vals = [];
-        foreach ($data as $k => $v) {
-            $set[] = "$k = ?";
-            $vals[] = $v;
+        $user = static::find((int) $id);
+        if (!$user) {
+            return false;
         }
-        $vals[] = $id;
-
-        return $db->query("UPDATE users SET " . implode(', ', $set) . ", updated_at = NOW() WHERE id = ?", $vals);
+        $user->fill($data);
+        $user->save();
+        return true;
     }
 
     /**
@@ -63,8 +48,12 @@ class UserModel
      */
     public static function softDelete($id)
     {
-        $db = self::initDB();
-        return $db->query("UPDATE users SET updated_at = NOW() WHERE id = ?", [$id]);
+        $user = static::find((int) $id);
+        if (!$user) {
+            return false;
+        }
+        $user->save();
+        return true;
     }
 
     /**
@@ -72,17 +61,17 @@ class UserModel
      */
     public static function createUser($name, $email, $username, $password, $avatarUrl = null)
     {
-        $db = self::initDB();
-
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-        $result = $db->query(
-            "INSERT INTO users (name, email, username, password, avatar_url, created_at, updated_at) 
-             VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
-            [$name, $email, $username, $hashedPassword, $avatarUrl]
-        );
-
-        return $db->lastInsertId();
+        $user = new static([
+            'name'      => $name,
+            'email'     => $email,
+            'username'  => $username,
+            'password'  => $hashedPassword,
+            'avatar_url'=> $avatarUrl,
+        ]);
+        $user->save();
+        return $user->id;
     }
 
     /**
@@ -90,8 +79,7 @@ class UserModel
      */
     public static function getUserByEmail($email)
     {
-        $db = self::initDB();
-        return $db->query("SELECT * FROM users WHERE email = ?", [$email])->fetchArray();
+        return static::first(['email' => $email]);
     }
 
     /**
@@ -99,8 +87,7 @@ class UserModel
      */
     public static function getUserByUsername($username)
     {
-        $db = self::initDB();
-        return $db->query("SELECT * FROM users WHERE username = ?", [$username])->fetchArray();
+        return static::first(['username' => $username]);
     }
 
     /**
@@ -108,8 +95,7 @@ class UserModel
      */
     public static function getUserById($id)
     {
-        $db = self::initDB();
-        return $db->query("SELECT * FROM users WHERE id = ?", [$id])->fetchArray();
+        return static::find((int) $id);
     }
 
     /**
@@ -117,22 +103,7 @@ class UserModel
      */
     public static function updateUser($id, $data)
     {
-        $db = self::initDB();
-
-        $setParts = [];
-        $values = [];
-
-        foreach ($data as $key => $value) {
-            $setParts[] = "$key = ?";
-            $values[] = $value;
-        }
-
-        $values[] = $id;
-
-        return $db->query(
-            "UPDATE users SET " . implode(', ', $setParts) . ", updated_at = NOW() WHERE id = ?",
-            $values
-        );
+        return static::updateById($id, $data);
     }
 
     /**
@@ -140,13 +111,13 @@ class UserModel
      */
     public static function searchUsers($query, $limit = 10)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
-            "SELECT id, name, username, email, avatar_url 
-             FROM users 
-             WHERE name LIKE ? OR username LIKE ? OR email LIKE ?
-             LIMIT ?",
+            "SELECT id, name, username, email, avatar_url"
+            . " FROM users"
+            . " WHERE name LIKE ? OR username LIKE ? OR email LIKE ?"
+            . " LIMIT ?",
             ["%$query%", "%$query%", "%$query%", $limit]
         )->fetchAll();
     }
@@ -156,16 +127,11 @@ class UserModel
      */
     public static function emailExists($email, $excludeUserId = null)
     {
-        $db = self::initDB();
-
+        $conditions = [['email', '=', $email]];
         if ($excludeUserId) {
-            $result = $db->query("SELECT COUNT(*) as count FROM users WHERE email = ? AND id != ?", [$email, $excludeUserId]);
-        } else {
-            $result = $db->query("SELECT COUNT(*) as count FROM users WHERE email = ?", [$email]);
+            $conditions[] = ['id', '!=', $excludeUserId];
         }
-
-        $row = $result->fetchArray();
-        return $row['count'] > 0;
+        return static::where($conditions) !== [];
     }
 
     /**
@@ -173,16 +139,11 @@ class UserModel
      */
     public static function usernameExists($username, $excludeUserId = null)
     {
-        $db = self::initDB();
-
+        $conditions = [['username', '=', $username]];
         if ($excludeUserId) {
-            $result = $db->query("SELECT COUNT(*) as count FROM users WHERE username = ? AND id != ?", [$username, $excludeUserId]);
-        } else {
-            $result = $db->query("SELECT COUNT(*) as count FROM users WHERE username = ?", [$username]);
+            $conditions[] = ['id', '!=', $excludeUserId];
         }
-
-        $row = $result->fetchArray();
-        return $row['count'] > 0;
+        return static::where($conditions) !== [];
     }
 
     /**
@@ -190,11 +151,7 @@ class UserModel
      */
     public static function getUserBasicInfo($userId)
     {
-        $db = self::initDB();
-        return $db->query(
-            "SELECT id, name, username, email, avatar_url FROM users WHERE id = ?",
-            [$userId]
-        )->fetchArray();
+        return static::find((int) $userId);
     }
 
     /**
@@ -205,16 +162,9 @@ class UserModel
         if (empty($userIds)) {
             return [];
         }
-
-        $db = self::initDB();
-        $placeholders = str_repeat('?,', count($userIds) - 1) . '?';
-
-        return $db->query(
-            "SELECT id, name, username, email, avatar_url, created_at 
-             FROM users 
-             WHERE id IN ($placeholders)",
-            $userIds
-        )->fetchAll();
+        return static::where([
+            ['id', 'IN', $userIds],
+        ]);
     }
 
     /**
@@ -222,11 +172,12 @@ class UserModel
      */
     public static function updateLastActivity($userId)
     {
-        $db = self::initDB();
-        return $db->query(
-            "UPDATE users SET updated_at = NOW() WHERE id = ?",
-            [$userId]
-        );
+        $user = static::find((int) $userId);
+        if (!$user) {
+            return false;
+        }
+        $user->save();
+        return true;
     }
 
     /**
@@ -234,7 +185,7 @@ class UserModel
      */
     public static function getUserCount()
     {
-        $db = self::initDB();
+        $db = static::db();
         $result = $db->query("SELECT COUNT(*) as count FROM users")->fetchArray();
         return $result['count'];
     }
@@ -291,13 +242,14 @@ class UserModel
      */
     public static function getRecentUsers($limit = 10)
     {
-        $db = self::initDB();
+        $db = static::db();
         return $db->query(
-            "SELECT id, name, username, email, avatar_url, created_at 
-             FROM users 
-             ORDER BY created_at DESC 
-             LIMIT ?",
+            "SELECT id, name, username, email, avatar_url, created_at"
+            . " FROM users"
+            . " ORDER BY created_at DESC"
+            . " LIMIT ?",
             [$limit]
         )->fetchAll();
     }
 }
+

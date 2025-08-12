@@ -2,86 +2,92 @@
 
 namespace App\Api\Models;
 
-use Framework\Core\Database;
+use Framework\Core\Model;
 
-class DeviceModel
+class DeviceModel extends Model
 {
-    private static $db;
-
-    public static function initDB()
-    {
-        if (!self::$db) {
-            self::$db = new Database();
-        }
-        return self::$db;
-    }
+    protected static string $table = 'user_devices';
+    protected array $fillable = [
+        'user_id', 'device_id', 'platform', 'fcm_token', 'device_name',
+        'app_version', 'os_version', 'last_active_at', 'created_at', 'updated_at'
+    ];
 
     public static function registerDevice($userId, $deviceId, $platform, $fcmToken = null, $deviceName = null, $appVersion = null, $osVersion = null)
     {
-        $db = self::initDB();
-        
-        // Check if device already exists
-        $existing = $db->query(
-            "SELECT id FROM user_devices WHERE user_id = ? AND device_id = ?",
-            [$userId, $deviceId]
-        )->fetchArray();
-        
-        if ($existing) {
-            // Update existing device
-            return $db->query(
-                "UPDATE user_devices SET 
-                 platform = ?, fcm_token = ?, device_name = ?, app_version = ?, os_version = ?, 
-                 last_active_at = NOW(), updated_at = NOW()
-                 WHERE id = ?",
-                [$platform, $fcmToken, $deviceName, $appVersion, $osVersion, $existing['id']]
-            );
-        } else {
-            // Insert new device
-            return $db->query(
-                "INSERT INTO user_devices (user_id, device_id, platform, fcm_token, device_name, app_version, os_version, last_active_at, created_at, updated_at) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())",
-                [$userId, $deviceId, $platform, $fcmToken, $deviceName, $appVersion, $osVersion]
-            );
+        $device = static::first([
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+        ]);
+
+        $data = [
+            'platform'    => $platform,
+            'fcm_token'   => $fcmToken,
+            'device_name' => $deviceName,
+            'app_version' => $appVersion,
+            'os_version'  => $osVersion,
+            'last_active_at' => (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
+        ];
+
+        if ($device) {
+            $device->fill($data);
+            $device->save();
+            return $device->id;
         }
+
+        $device = new static(array_merge($data, [
+            'user_id'   => $userId,
+            'device_id' => $deviceId,
+        ]));
+        $device->save();
+        return $device->id;
     }
 
     public static function updateLastActive($userId, $deviceId)
     {
-        $db = self::initDB();
-        
-        return $db->query(
-            "UPDATE user_devices SET last_active_at = NOW(), updated_at = NOW() WHERE user_id = ? AND device_id = ?",
-            [$userId, $deviceId]
-        );
+        $device = static::first([
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+        ]);
+        if (!$device) {
+            return false;
+        }
+        $device->last_active_at = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+        $device->save();
+        return true;
     }
 
     public static function getUserDevices($userId)
     {
-        $db = self::initDB();
-        
-        return $db->query(
-            "SELECT * FROM user_devices WHERE user_id = ? ORDER BY last_active_at DESC",
-            [$userId]
-        )->fetchAll();
+        $devices = static::where(['user_id' => $userId]);
+        usort($devices, fn($a, $b) => strcmp($b->last_active_at, $a->last_active_at));
+        return array_map(fn($d) => $d->toArray(), $devices);
     }
 
     public static function removeDevice($userId, $deviceId)
     {
-        $db = self::initDB();
-        
-        return $db->query(
-            "DELETE FROM user_devices WHERE user_id = ? AND device_id = ?",
-            [$userId, $deviceId]
-        );
+        $device = static::first([
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+        ]);
+        if (!$device) {
+            return false;
+        }
+        $device->delete();
+        return true;
     }
 
     public static function updateFcmToken($userId, $deviceId, $fcmToken)
     {
-        $db = self::initDB();
-        
-        return $db->query(
-            "UPDATE user_devices SET fcm_token = ?, updated_at = NOW() WHERE user_id = ? AND device_id = ?",
-            [$fcmToken, $userId, $deviceId]
-        );
+        $device = static::first([
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+        ]);
+        if (!$device) {
+            return false;
+        }
+        $device->fcm_token = $fcmToken;
+        $device->save();
+        return true;
     }
 }
+
