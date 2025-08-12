@@ -2,31 +2,25 @@
 
 namespace App\Api\Models;
 
-use Framework\Core\Database;
+use Framework\Core\Model;
 
-class MessageModel
+class MessageModel extends Model
 {
-    private static $db;
-
-    public static function initDB()
-    {
-        if (!self::$db) {
-            self::$db = new Database();
-        }
-        return self::$db;
-    }
+    protected static string $table = 'messages';
+    protected array $fillable = ['conversation_id', 'sender_id', 'content', 'message_type', 'parent_id', 'created_at'];
+    protected bool $timestamps = false;
 
     public static function createMessage($conversationId, $senderId, $content, $messageType = 'text', $parentId = null)
     {
-        $db = self::initDB();
-
-        $result = $db->query(
-            "INSERT INTO messages (conversation_id, sender_id, content, message_type, parent_id, created_at) 
-             VALUES (?, ?, ?, ?, ?, NOW())",
-            [$conversationId, $senderId, $content, $messageType, $parentId]
-        );
-
-        return $db->lastInsertId();
+        $message = new static([
+            'conversation_id' => $conversationId,
+            'sender_id'       => $senderId,
+            'content'         => $content,
+            'message_type'    => $messageType,
+            'parent_id'       => $parentId,
+        ]);
+        $message->save();
+        return $message->id;
     }
 
     /**
@@ -34,7 +28,7 @@ class MessageModel
      */
     public static function getMessagesPaginated($query, $params = [])
     {
-        $db = self::initDB();
+        $db = static::db();
         return $db->dataQuery($query, $params);
     }
 
@@ -43,13 +37,13 @@ class MessageModel
      */
     public static function getMessageWithDetails($messageId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
-            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar
-             FROM messages m
-             JOIN users u ON m.sender_id = u.id
-             WHERE m.id = ?",
+            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar"
+            . " FROM messages m"
+            . " JOIN users u ON m.sender_id = u.id"
+            . " WHERE m.id = ?",
             [$messageId]
         )->fetchArray();
     }
@@ -59,7 +53,7 @@ class MessageModel
      */
     public static function toggleReaction($messageId, $userId, $emoji)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         // Check if reaction already exists
         $existing = $db->query(
@@ -89,17 +83,17 @@ class MessageModel
      */
     public static function searchUserMessages($userId, $searchQuery, $limit, $offset)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
-            "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title
-             FROM messages m
-             JOIN users u ON m.sender_id = u.id
-             JOIN conversations c ON m.conversation_id = c.id
-             JOIN conversation_participants cp ON c.id = cp.conversation_id
-             WHERE cp.user_id = ? AND m.content LIKE ?
-             ORDER BY m.created_at DESC
-             LIMIT ? OFFSET ?",
+            "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title"
+            . " FROM messages m"
+            . " JOIN users u ON m.sender_id = u.id"
+            . " JOIN conversations c ON m.conversation_id = c.id"
+            . " JOIN conversation_participants cp ON c.id = cp.conversation_id"
+            . " WHERE cp.user_id = ? AND m.content LIKE ?"
+            . " ORDER BY m.created_at DESC"
+            . " LIMIT ? OFFSET ?",
             [$userId, "%{$searchQuery}%", $limit, $offset]
         )->fetchAll();
     }
@@ -109,13 +103,13 @@ class MessageModel
      */
     public static function getUserSearchCount($userId, $searchQuery)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $result = $db->query(
-            "SELECT COUNT(*) as count
-             FROM messages m
-             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
-             WHERE cp.user_id = ? AND m.content LIKE ?",
+            "SELECT COUNT(*) as count"
+            . " FROM messages m"
+            . " JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id"
+            . " WHERE cp.user_id = ? AND m.content LIKE ?",
             [$userId, "%{$searchQuery}%"]
         )->fetchArray();
 
@@ -127,7 +121,7 @@ class MessageModel
      */
     public static function markAsRead($messageId, $userId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         // Check if already marked as read
         $existing = $db->query(
@@ -148,7 +142,7 @@ class MessageModel
      */
     public static function addMention($messageId, $mentionedUserId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
             "INSERT INTO message_mentions (message_id, mentioned_user_id) VALUES (?, ?)",
@@ -161,18 +155,19 @@ class MessageModel
      */
     public static function getConversationMessagesWithDetails($conversationId, $limit = 50, $offset = 0)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
-            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar,
-                    (SELECT COUNT(*) FROM message_reactions WHERE message_id = m.id) as reaction_count,
-                    (SELECT GROUP_CONCAT(DISTINCT emoji) FROM message_reactions WHERE message_id = m.id) as reactions
-             FROM messages m
-             JOIN users u ON m.sender_id = u.id
-             WHERE m.conversation_id = ?
-             ORDER BY m.created_at ASC
-             LIMIT ? OFFSET ?",
+            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar," 
+            . " (SELECT COUNT(*) FROM message_reactions WHERE message_id = m.id) as reaction_count," 
+            . " (SELECT GROUP_CONCAT(DISTINCT emoji) FROM message_reactions WHERE message_id = m.id) as reactions" 
+            . " FROM messages m" 
+            . " JOIN users u ON m.sender_id = u.id" 
+            . " WHERE m.conversation_id = ?" 
+            . " ORDER BY m.created_at ASC" 
+            . " LIMIT ? OFFSET ?",
             [$conversationId, $limit, $offset]
         )->fetchAll();
     }
 }
+

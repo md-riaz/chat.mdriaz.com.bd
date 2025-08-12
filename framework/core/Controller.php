@@ -12,8 +12,7 @@ class Controller
     {
 
         if (!$this->db) {
-
-            $this->db = new Database;
+            $this->db = DBManager::getDB();
         }
 
         $response = $log_response = json_encode($this->data);

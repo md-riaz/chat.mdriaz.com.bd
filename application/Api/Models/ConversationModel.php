@@ -2,32 +2,26 @@
 
 namespace App\Api\Models;
 
-use Framework\Core\Database;
-use App\Enum\Status;
-
-class ConversationModel
+use Framework\Core\Model;
+class ConversationModel extends Model
 {
-    private static $db;
-
-    public static function initDB()
-    {
-        if (!self::$db) {
-            self::$db = new Database();
-        }
-        return self::$db;
-    }
+    protected static string $table = 'conversations';
+    protected array $fillable = ['title', 'is_group', 'created_by', 'created_at'];
+    protected bool $timestamps = false;
 
     /**
      * Create a new conversation
      */
     public static function createConversation($title = null, $isGroup = false, $createdBy = null)
     {
-        $db = self::initDB();
+        $conversation = new static([
+            'title'      => $title,
+            'is_group'   => $isGroup ? 1 : 0,
+            'created_by' => $createdBy,
+        ]);
+        $conversation->save();
 
-        $sql = "INSERT INTO conversations (title, is_group, created_by, created_at) VALUES (?, ?, ?, NOW())";
-        $result = $db->query($sql, [$title, $isGroup ? 1 : 0, $createdBy]);
-
-        return $result->lastInsertID();
+        return $conversation->id;
     }
 
     /**
@@ -35,10 +29,8 @@ class ConversationModel
      */
     public static function getConversationById($conversationId)
     {
-        $db = self::initDB();
-
-        $sql = "SELECT * FROM conversations WHERE id = ?";
-        return $db->query($sql, [$conversationId])->fetchArray();
+        $conversation = static::find((int) $conversationId);
+        return $conversation?->toArray();
     }
 
     /**
@@ -46,7 +38,7 @@ class ConversationModel
      */
     public static function getUserConversations($userId, $limit = 50, $offset = 0)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $sql = "SELECT c.*, 
                        cp.last_read_message_id,
@@ -69,20 +61,13 @@ class ConversationModel
      */
     public static function updateConversation($conversationId, $data)
     {
-        $db = self::initDB();
-
-        $setParts = [];
-        $values = [];
-
-        foreach ($data as $key => $value) {
-            $setParts[] = "$key = ?";
-            $values[] = $value;
+        $conversation = static::find((int) $conversationId);
+        if (!$conversation) {
+            return 0;
         }
-
-        $values[] = $conversationId;
-
-        $sql = "UPDATE conversations SET " . implode(', ', $setParts) . " WHERE id = ?";
-        return $db->query($sql, $values)->affectedRows();
+        $conversation->fill($data);
+        $conversation->save();
+        return 1;
     }
 
     /**
@@ -90,7 +75,7 @@ class ConversationModel
      */
     public static function deleteConversation($conversationId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         try {
             $db->beginTransaction();
@@ -121,12 +106,10 @@ class ConversationModel
      */
     public static function isUserParticipant($conversationId, $userId)
     {
-        $db = self::initDB();
-
-        $sql = "SELECT COUNT(*) as count FROM conversation_participants WHERE conversation_id = ? AND user_id = ?";
-        $result = $db->query($sql, [$conversationId, $userId])->fetchArray();
-
-        return $result['count'] > 0;
+        return ConversationParticipantModel::first([
+            'conversation_id' => $conversationId,
+            'user_id'        => $userId,
+        ]) !== null;
     }
 
     /**
@@ -134,7 +117,7 @@ class ConversationModel
      */
     public static function getConversationParticipants($conversationId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $sql = "SELECT cp.*, u.name, u.username, u.avatar_url, u.email
                 FROM conversation_participants cp
@@ -150,7 +133,7 @@ class ConversationModel
      */
     public static function getUserConversationsPaginated($query, $params = [])
     {
-        $db = self::initDB();
+        $db = static::db();
         return $db->dataQuery($query, $params);
     }
 
@@ -159,7 +142,7 @@ class ConversationModel
      */
     public static function getConversationDetails($conversationId, $userId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $sql = "SELECT c.*, 
                        cp.role as user_role,
@@ -177,7 +160,7 @@ class ConversationModel
      */
     public static function getDirectConversation($userId1, $userId2)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $sql = "SELECT c.* FROM conversations c
                 WHERE c.is_group = 0
@@ -200,7 +183,7 @@ class ConversationModel
      */
     public static function getUnreadCount($conversationId, $userId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         $sql = "SELECT COUNT(*) as count 
                 FROM messages m

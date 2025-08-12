@@ -2,19 +2,16 @@
 
 namespace App\Api\Models;
 
-use Framework\Core\Database;
+use Framework\Core\Model;
 
-class MessageAttachmentModel
+class MessageAttachmentModel extends Model
 {
-    private static $db;
-
-    public static function initDB()
-    {
-        if (!self::$db) {
-            self::$db = new Database();
-        }
-        return self::$db;
-    }
+    protected static string $table = 'message_attachments';
+    protected array $fillable = [
+        'message_id', 'uploader_id', 'file_url', 'mime_type', 'size',
+        'original_name', 'uploaded_at', 'linked'
+    ];
+    protected bool $timestamps = false;
 
     /**
      * Add attachment to a message (alias for createAttachment)
@@ -26,43 +23,48 @@ class MessageAttachmentModel
 
     public static function createAttachment($messageId, $uploaderId, $fileUrl, $mimeType = null, $size = null, $originalName = null)
     {
-        $db = self::initDB();
-
-        $result = $db->query(
-            "INSERT INTO message_attachments (message_id, uploader_id, file_url, mime_type, size, original_name, uploaded_at, linked)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), 1)",
-            [$messageId, $uploaderId, $fileUrl, $mimeType, $size, $originalName]
-        );
-
-        return $db->lastInsertId();
+        $attachment = new static([
+            'message_id'   => $messageId,
+            'uploader_id'  => $uploaderId,
+            'file_url'     => $fileUrl,
+            'mime_type'    => $mimeType,
+            'size'         => $size,
+            'original_name'=> $originalName,
+            'linked'       => 1,
+        ]);
+        $attachment->save();
+        return $attachment->id;
     }
 
     public static function createUnlinkedAttachment($uploaderId, $fileUrl, $mimeType = null, $size = null, $originalName = null)
     {
-        $db = self::initDB();
-
-        $result = $db->query(
-            "INSERT INTO message_attachments (uploader_id, file_url, mime_type, size, original_name, uploaded_at, linked)
-             VALUES (?, ?, ?, ?, ?, NOW(), 0)",
-            [$uploaderId, $fileUrl, $mimeType, $size, $originalName]
-        );
-
-        return $db->lastInsertId();
+        $attachment = new static([
+            'uploader_id'  => $uploaderId,
+            'file_url'     => $fileUrl,
+            'mime_type'    => $mimeType,
+            'size'         => $size,
+            'original_name'=> $originalName,
+            'linked'       => 0,
+        ]);
+        $attachment->save();
+        return $attachment->id;
     }
 
     public static function linkAttachmentToMessage($attachmentId, $messageId)
     {
-        $db = self::initDB();
-
-        return $db->query(
-            "UPDATE message_attachments SET message_id = ?, linked = 1 WHERE id = ?",
-            [$messageId, $attachmentId]
-        );
+        $attachment = static::find((int) $attachmentId);
+        if (!$attachment) {
+            return false;
+        }
+        $attachment->message_id = $messageId;
+        $attachment->linked = 1;
+        $attachment->save();
+        return true;
     }
 
     public static function getMessageAttachments($messageId)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
             "SELECT * FROM message_attachments WHERE message_id = ? ORDER BY uploaded_at ASC",
@@ -72,39 +74,30 @@ class MessageAttachmentModel
 
     public static function getAttachmentById($attachmentId)
     {
-        $db = self::initDB();
-
-        return $db->query(
-            "SELECT * FROM message_attachments WHERE id = ?",
-            [$attachmentId]
-        )->fetchArray();
+        $attachment = static::find((int) $attachmentId);
+        return $attachment?->toArray();
     }
 
     public static function deleteAttachment($attachmentId, $uploaderId = null)
     {
-        $db = self::initDB();
-
-        $whereClause = "WHERE id = ?";
-        $params = [$attachmentId];
-
-        if ($uploaderId) {
-            $whereClause .= " AND uploader_id = ?";
-            $params[] = $uploaderId;
+        $attachment = static::find((int) $attachmentId);
+        if (!$attachment) {
+            return false;
         }
-
-        return $db->query(
-            "DELETE FROM message_attachments $whereClause",
-            $params
-        );
+        if ($uploaderId && $attachment->uploader_id != $uploaderId) {
+            return false;
+        }
+        $attachment->delete();
+        return true;
     }
 
     public static function cleanupUnlinkedAttachments($olderThanHours = 24)
     {
-        $db = self::initDB();
+        $db = static::db();
 
         return $db->query(
-            "DELETE FROM message_attachments
-             WHERE linked = 0 AND uploaded_at < DATE_SUB(NOW(), INTERVAL ? HOUR)",
+            "DELETE FROM message_attachments"
+            . " WHERE linked = 0 AND uploaded_at < DATE_SUB(NOW(), INTERVAL ? HOUR)",
             [$olderThanHours]
         );
     }
