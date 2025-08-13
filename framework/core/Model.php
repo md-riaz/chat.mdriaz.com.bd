@@ -135,6 +135,62 @@ abstract class Model
         return $related::first([[$ownerKey, '=', $value]]);
     }
 
+    protected function belongsToMany(
+        string $relatedClass,
+        string $pivotTable,
+        string $foreignPivotKey,
+        string $relatedPivotKey,
+        string $localKey = 'id',
+        string $relatedKey = 'id',
+        bool $withPivot = false
+    ): array {
+        $localValue = $this->attributes[$localKey] ?? null;
+        if ($localValue === null) {
+            return [];
+        }
+
+        $db = static::db();
+
+        $pivotRows = $db
+            ->query(
+                "SELECT * FROM {$pivotTable} WHERE {$foreignPivotKey} = ?",
+                [$localValue]
+            )
+            ->fetchAll();
+        if (!$pivotRows) {
+            return [];
+        }
+
+        $relatedIds = array_unique(array_column($pivotRows, $relatedPivotKey));
+        $placeholders = implode(', ', array_fill(0, count($relatedIds), '?'));
+        /** @var class-string<Model> $relatedClass */
+        $relatedTable = $relatedClass::$table;
+        $relatedRows = $db
+            ->query(
+                "SELECT * FROM {$relatedTable} WHERE {$relatedKey} IN ({$placeholders})",
+                $relatedIds
+            )
+            ->fetchAll() ?: [];
+
+        $pivotMap = [];
+        foreach ($pivotRows as $pivot) {
+            $pivotMap[$pivot[$relatedPivotKey]] = $pivot;
+        }
+
+        $results = [];
+        foreach ($relatedRows as $row) {
+            $model = new $relatedClass();
+            $model->attributes = $row;
+            $model->original = $row;
+            if ($withPivot && isset($pivotMap[$row[$relatedKey]])) {
+                $model->relations['_pivot'] = $pivotMap[$row[$relatedKey]];
+            }
+            $results[] = $model;
+        }
+
+        return $results;
+    }
+
     public static function all(): array
     {
         $db = static::db();
