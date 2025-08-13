@@ -352,6 +352,22 @@ abstract class Model
     }
 
     /**
+     * Find the first record matching the conditions or create it.
+     */
+    public static function firstOrCreate(array $where, array $attributes = []): static
+    {
+        $existing = static::first($where);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $model = new static($attributes + $where);
+        $model->save();
+
+        return $model;
+    }
+
+    /**
      * Build a WHERE clause and parameters from a simple conditions array.
      *
      * Supported forms:
