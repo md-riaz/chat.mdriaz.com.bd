@@ -368,6 +368,24 @@ abstract class Model
     }
 
     /**
+     * Update an existing record matching the conditions or create it.
+     */
+    public static function updateOrCreate(array $where, array $values = []): static
+    {
+        $model = static::first($where);
+        if ($model !== null) {
+            $model->fill($values);
+            $model->save();
+            return $model;
+        }
+
+        $model = new static($where + $values);
+        $model->save();
+
+        return $model;
+    }
+
+    /**
      * Build a WHERE clause and parameters from a simple conditions array.
      *
      * Supported forms:
