@@ -197,4 +197,23 @@ class ConversationModel extends Model
 
         return $result['count'];
     }
+
+    /**
+     * Get total unread message count across all conversations for user
+     */
+    public static function getTotalUnreadCount($userId)
+    {
+        $db = static::db();
+
+        $sql = "SELECT COUNT(*) as count
+                FROM messages m
+                JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+                WHERE cp.user_id = ?
+                AND (cp.last_read_message_id IS NULL OR m.id > cp.last_read_message_id)
+                AND m.sender_id != ?";
+
+        $result = $db->query($sql, [$userId, $userId])->fetchArray();
+
+        return $result['count'];
+    }
 }
