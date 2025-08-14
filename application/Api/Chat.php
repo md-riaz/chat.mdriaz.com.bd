@@ -39,6 +39,11 @@ class Chat extends ApiController
 
         $this->validateRequired($data, ['conversation_id', 'content']);
 
+        if (!ConversationParticipantModel::isParticipant($data['conversation_id'], $user['user_id'])) {
+            $this->respondError(403, 'User is not a participant of this conversation');
+            return;
+        }
+
         try {
             $messageId = MessageModel::createMessage(
                 $data['conversation_id'],
