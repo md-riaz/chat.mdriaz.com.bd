@@ -110,6 +110,26 @@ class MessageModel extends Model
     }
 
     /**
+     * Search user's messages within a specific conversation
+     */
+    public static function searchConversationMessages($userId, $conversationId, $searchQuery, $limit, $offset)
+    {
+        $db = static::db();
+
+        return $db->query(
+            "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title"
+            . " FROM messages m"
+            . " JOIN users u ON m.sender_id = u.id"
+            . " JOIN conversations c ON m.conversation_id = c.id"
+            . " JOIN conversation_participants cp ON c.id = cp.conversation_id"
+            . " WHERE cp.user_id = ? AND m.conversation_id = ? AND m.content LIKE ?"
+            . " ORDER BY m.created_at DESC"
+            . " LIMIT ? OFFSET ?",
+            [$userId, $conversationId, "%{$searchQuery}%", $limit, $offset]
+        )->fetchAll();
+    }
+
+    /**
      * Get count of search results for user
      */
     public static function getUserSearchCount($userId, $searchQuery)
