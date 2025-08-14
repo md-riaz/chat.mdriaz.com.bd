@@ -184,11 +184,25 @@ class User extends ApiController
 
         $file = $_FILES['avatar'];
 
-        // Validate file type
-        $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!in_array($file['type'], $allowedTypes)) {
+        // Detect and validate MIME type
+        $allowedTypes = [
+            'image/jpeg' => ['jpg', 'jpeg'],
+            'image/png'  => ['png'],
+            'image/gif'  => ['gif'],
+            'image/webp' => ['webp']
+        ];
+
+        $mimeType = mime_content_type($file['tmp_name']);
+        if (!isset($allowedTypes[$mimeType])) {
             $this->respondError(400, 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed');
         }
+
+        // Validate file extension and determine safe extension
+        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        if (!in_array($extension, $allowedTypes[$mimeType], true)) {
+            $this->respondError(400, 'File extension does not match MIME type');
+        }
+        $safeExtension = $allowedTypes[$mimeType][0];
 
         // Validate file size (max 5MB)
         if ($file['size'] > 5 * 1024 * 1024) {
@@ -202,9 +216,8 @@ class User extends ApiController
                 mkdir($uploadDir, 0755, true);
             }
 
-            // Generate unique filename
-            $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $filename = 'avatar_' . $id . '_' . time() . '.' . $extension;
+            // Generate unique filename using safe extension
+            $filename = 'avatar_' . $id . '_' . time() . '.' . $safeExtension;
             $filePath = $uploadDir . $filename;
 
             if (move_uploaded_file($file['tmp_name'], $filePath)) {
