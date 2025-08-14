@@ -19,11 +19,11 @@ class User extends ApiController
         $this->authenticate();
 
         // Build search conditions
-        $whereClause = "";
+        $whereClause = "WHERE deleted_at IS NULL";
         $params = [];
 
         if (!empty($search)) {
-            $whereClause = "WHERE (name LIKE ? OR email LIKE ? OR username LIKE ?)";
+            $whereClause .= " AND (name LIKE ? OR email LIKE ? OR username LIKE ?)";
             $searchTerm = "%{$search}%";
             $params = [$searchTerm, $searchTerm, $searchTerm];
         }
@@ -91,7 +91,7 @@ class User extends ApiController
                 if ($field === 'username' && !empty($data[$field])) {
                     // Check username uniqueness
                     $existing = $this->db->query(
-                        "SELECT id FROM users WHERE username = ? AND id != ?",
+                        "SELECT id FROM users WHERE username = ? AND id != ? AND deleted_at IS NULL",
                         [$data[$field], $id]
                     )->fetchArray();
 
