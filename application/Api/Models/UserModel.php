@@ -7,7 +7,7 @@ use Framework\Core\Model;
 class UserModel extends Model
 {
     protected static string $table = 'users';
-    protected array $fillable = ['name', 'email', 'username', 'password', 'avatar_url', 'created_at', 'updated_at'];
+    protected array $fillable = ['name', 'email', 'username', 'password', 'avatar_url', 'created_at', 'updated_at', 'deleted_at'];
 
     /**
      * Run a paginated user listing using Database::dataQuery
@@ -52,6 +52,7 @@ class UserModel extends Model
         if (!$user) {
             return false;
         }
+        $user->deleted_at = date('Y-m-d H:i:s');
         $user->save();
         return true;
     }
@@ -116,7 +117,7 @@ class UserModel extends Model
         return $db->query(
             "SELECT id, name, username, email, avatar_url"
             . " FROM users"
-            . " WHERE name LIKE ? OR username LIKE ? OR email LIKE ?"
+            . " WHERE deleted_at IS NULL AND (name LIKE ? OR username LIKE ? OR email LIKE ?)"
             . " LIMIT ?",
             ["%$query%", "%$query%", "%$query%", $limit]
         )->fetchAll();
@@ -162,9 +163,19 @@ class UserModel extends Model
         if (empty($userIds)) {
             return [];
         }
-        return static::where([
-            ['id', 'IN', $userIds],
-        ]);
+        $db = static::db();
+        $placeholders = implode(', ', array_fill(0, count($userIds), '?'));
+        $rows = $db->query(
+            "SELECT * FROM users WHERE id IN ({$placeholders}) AND deleted_at IS NULL",
+            $userIds
+        )->fetchAll() ?: [];
+
+        return array_map(function (array $row) {
+            $model = new static();
+            $model->attributes = $row;
+            $model->original = $row;
+            return $model;
+        }, $rows);
     }
 
     /**
@@ -186,7 +197,7 @@ class UserModel extends Model
     public static function getUserCount()
     {
         $db = static::db();
-        $result = $db->query("SELECT COUNT(*) as count FROM users")->fetchArray();
+        $result = $db->query("SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL")->fetchArray();
         return $result['count'];
     }
 
@@ -246,6 +257,7 @@ class UserModel extends Model
         return $db->query(
             "SELECT id, name, username, email, avatar_url, created_at"
             . " FROM users"
+            . " WHERE deleted_at IS NULL"
             . " ORDER BY created_at DESC"
             . " LIMIT ?",
             [$limit]
