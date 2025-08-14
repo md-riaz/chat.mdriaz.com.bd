@@ -198,7 +198,7 @@ class Chat extends ApiController
         try {
             if ($conversationId) {
                 // Search within specific conversation - use Message model method
-                $messages = MessageModel::searchUserMessages($user['user_id'], $query, $limit, $offset);
+                $messages = MessageModel::searchConversationMessages($user['user_id'], $conversationId, $query, $limit, $offset);
             } else {
                 // Search across all user's conversations
                 $messages = MessageModel::searchUserMessages($user['user_id'], $query, $limit, $offset);
