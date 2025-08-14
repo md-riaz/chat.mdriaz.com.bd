@@ -218,13 +218,7 @@ class Chat extends ApiController
         $user = $this->authenticate();
 
         try {
-            // Get total unread count across all conversations
-            $totalUnread = 0;
-            $conversations = ConversationModel::getUserConversations($user['user_id'], 100, 0);
-
-            foreach ($conversations as $conversation) {
-                $totalUnread += ConversationModel::getUnreadCount($conversation['id'], $user['user_id']);
-            }
+            $totalUnread = ConversationModel::getTotalUnreadCount($user['user_id']);
 
             $this->respondSuccess([
                 'unread_count' => $totalUnread
