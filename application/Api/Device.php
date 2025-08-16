@@ -14,9 +14,14 @@ class Device extends ApiController
     public function register()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['device_id', 'platform']);
+        if ($error = $this->validateRequired($data, ['device_id', 'platform'])) {
+            return $error;
+        }
 
         try {
             $result = DeviceModel::registerDevice(
@@ -29,12 +34,12 @@ class Device extends ApiController
                 $data['os_version'] ?? null
             );
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'device_registered' => true,
                 'device_id' => $data['device_id']
             ], 'Device registered successfully', 201);
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to register device');
+            return $this->respondError(500, 'Failed to register device');
         }
     }
 
@@ -44,13 +49,16 @@ class Device extends ApiController
     public function index()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             $devices = DeviceModel::getUserDevices($user['user_id']);
 
-            $this->respondSuccess($devices, 'Devices retrieved successfully');
+            return $this->respondSuccess($devices, 'Devices retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve devices');
+            return $this->respondError(500, 'Failed to retrieve devices');
         }
     }
 
@@ -60,10 +68,13 @@ class Device extends ApiController
     public function update($deviceId = null)
     {
         if (!$deviceId) {
-            $this->respondError(400, 'Device ID is required');
+            return $this->respondError(400, 'Device ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
         // Check if device belongs to user
@@ -73,7 +84,7 @@ class Device extends ApiController
         )->fetchArray();
 
         if (!$device) {
-            $this->respondError(404, 'Device not found');
+            return $this->respondError(404, 'Device not found');
         }
 
         $allowedFields = ['fcm_token', 'app_version', 'device_name', 'os_version'];
@@ -88,7 +99,7 @@ class Device extends ApiController
         }
 
         if (empty($updateFields)) {
-            $this->respondError(400, 'No valid fields to update');
+            return $this->respondError(400, 'No valid fields to update');
         }
 
         $updateFields[] = "updated_at = NOW()";
@@ -102,9 +113,9 @@ class Device extends ApiController
                 $params
             );
 
-            $this->respondSuccess(null, 'Device updated successfully');
+            return $this->respondSuccess(null, 'Device updated successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to update device');
+            return $this->respondError(500, 'Failed to update device');
         }
     }
 
@@ -114,21 +125,24 @@ class Device extends ApiController
     public function delete($deviceId = null)
     {
         if (!$deviceId) {
-            $this->respondError(400, 'Device ID is required');
+            return $this->respondError(400, 'Device ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             $result = DeviceModel::removeDevice($user['user_id'], $deviceId);
 
             if ($result->rowCount() > 0) {
-                $this->respondSuccess(null, 'Device unregistered successfully');
+                return $this->respondSuccess(null, 'Device unregistered successfully');
             } else {
-                $this->respondError(404, 'Device not found');
+                return $this->respondError(404, 'Device not found');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to unregister device');
+            return $this->respondError(500, 'Failed to unregister device');
         }
     }
 
@@ -138,23 +152,26 @@ class Device extends ApiController
     public function ping($deviceId = null)
     {
         if (!$deviceId) {
-            $this->respondError(400, 'Device ID is required');
+            return $this->respondError(400, 'Device ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             $result = DeviceModel::updateLastActive($user['user_id'], $deviceId);
 
             if ($result->rowCount() > 0) {
-                $this->respondSuccess([
+                return $this->respondSuccess([
                     'timestamp' => date('Y-m-d H:i:s')
                 ], 'Device ping updated successfully');
             } else {
-                $this->respondError(404, 'Device not found');
+                return $this->respondError(404, 'Device not found');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to update device ping');
+            return $this->respondError(500, 'Failed to update device ping');
         }
     }
 
@@ -164,12 +181,15 @@ class Device extends ApiController
     public function testNotification()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
         $deviceId = $data['device_id'] ?? null;
 
         if (!$deviceId) {
-            $this->respondError(400, 'Device ID is required');
+            return $this->respondError(400, 'Device ID is required');
         }
 
         try {
@@ -180,7 +200,7 @@ class Device extends ApiController
             )->fetchArray();
 
             if (!$device || empty($device['fcm_token'])) {
-                $this->respondError(404, 'Device not found or FCM token not available');
+                return $this->respondError(404, 'Device not found or FCM token not available');
             }
 
             // Here you would typically send a push notification using FCM
@@ -188,12 +208,12 @@ class Device extends ApiController
             $notificationSent = true; // DeviceModel::sendPushNotification($device['fcm_token'], 'Test Notification', 'This is a test notification');
 
             if ($notificationSent) {
-                $this->respondSuccess(null, 'Test notification sent successfully');
+                return $this->respondSuccess(null, 'Test notification sent successfully');
             } else {
-                $this->respondError(500, 'Failed to send test notification');
+                return $this->respondError(500, 'Failed to send test notification');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to send test notification');
+            return $this->respondError(500, 'Failed to send test notification');
         }
     }
 }

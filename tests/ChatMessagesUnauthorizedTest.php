@@ -15,14 +15,17 @@ namespace App\Api\Models {
     }
 }
 
-namespace App\Api {
-    abstract class ApiController {}
+namespace Framework\Core {
+    class Controller {}
+    class DBManager { public static function getDB() { return new class {}; } }
+    class Auth { public static function currentUser() { return null; } }
 }
 
 namespace Tests {
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../application/Api/ApiController.php';
 require_once __DIR__ . '/../application/Api/Chat.php';
 
 class ChatMessagesUnauthorizedTest extends TestCase
@@ -30,33 +33,18 @@ class ChatMessagesUnauthorizedTest extends TestCase
     public function testMessagesReturns403WhenUserNotParticipant(): void
     {
         $chat = new class extends \App\Api\Chat {
-            public $statusCode;
             public function __construct() {}
             protected function authenticate($required = true)
             {
                 return ['user_id' => 99];
             }
-            protected function respondError($statusCode, $message, $errors = null)
-            {
-                $this->statusCode = $statusCode;
-                throw new \Exception('error');
-            }
-            protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
-            {
-                $this->statusCode = $statusCode;
-                throw new \Exception('success');
-            }
         };
 
         $_GET['conversation_id'] = 1;
 
-        try {
-            $chat->messages();
-        } catch (\Exception $e) {
-            // Ignore to allow assertions
-        }
+        $result = $chat->messages();
 
-        $this->assertEquals(403, $chat->statusCode);
+        $this->assertEquals(403, $result['status_code']);
         $this->assertTrue(\App\Api\Models\ConversationParticipantModel::$called);
     }
 }
