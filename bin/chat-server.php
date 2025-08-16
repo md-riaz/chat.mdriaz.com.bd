@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/framework/core/Framework.php';
+require_once __DIR__ . '/../framework/core/Framework.php';
 
 use Ratchet\App;
 use App\ChatServer;
