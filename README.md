@@ -72,7 +72,10 @@ The system uses the following core tables:
 
 3. **Configure the application**
 
-   - Copy `.env.local` and update values to match your environment (database, Redis, WebSocket, etc.)
+   - Copy `.env.example` to `.env.local` and update values to match your environment (database, Redis, WebSocket, etc.)
+     ```bash
+     cp .env.example .env.local
+     ```
    - Alternatively update settings directly in `configuration/config.php`
    - Set up your domain and security settings
 
