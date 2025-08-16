@@ -7,6 +7,7 @@ use App\Api\Models\ConversationModel;
 use App\Api\Models\ConversationParticipantModel;
 use App\Api\Models\MessageModel;
 use App\Api\Models\UserModel;
+use App\Api\Services\RedisService;
 
 class Chat extends ApiController
 {
@@ -241,9 +242,28 @@ class Chat extends ApiController
         }
 
         try {
-            // Get typing users (this would typically be cached/stored in Redis)
-            // For now, return empty array
+            $redis = RedisService::getInstance();
             $typingUsers = [];
+
+            if ($redis->isConnected()) {
+                $pattern = "typing:{$conversationId}:*";
+                $client = $redis->getRedisInstance();
+                $keys = $client->keys($pattern);
+
+                foreach ($keys as $key) {
+                    $ttl = $client->ttl($key);
+                    if ($ttl <= 0) {
+                        // Clean up stale keys
+                        $redis->delete($key);
+                        continue;
+                    }
+                    $parts = explode(':', $key);
+                    $uid = $parts[2] ?? null;
+                    if ($uid !== null) {
+                        $typingUsers[] = (int)$uid;
+                    }
+                }
+            }
 
             $this->respondSuccess([
                 'typing_users' => $typingUsers
@@ -264,8 +284,22 @@ class Chat extends ApiController
         $this->validateRequired($data, ['conversation_id', 'is_typing']);
 
         try {
-            // Store typing status (this would typically be cached/stored in Redis)
-            // For now, just acknowledge the request
+            $redis = RedisService::getInstance();
+            $conversationId = $data['conversation_id'];
+            $userId = $user['user_id'];
+
+            if ($redis->isConnected()) {
+                $typingKey = "typing:{$conversationId}:{$userId}";
+                if ($data['is_typing']) {
+                    $redis->set($typingKey, 1, 10); // TTL 10 seconds
+                } else {
+                    $redis->delete($typingKey);
+                }
+
+                // Mark user as online in this conversation
+                $onlineKey = "online:{$conversationId}:{$userId}";
+                $redis->set($onlineKey, 1, 300); // TTL 5 minutes
+            }
 
             $this->respondSuccess(null, 'Typing status updated');
         } catch (\Exception $e) {
@@ -279,11 +313,32 @@ class Chat extends ApiController
     public function onlineUsers()
     {
         $user = $this->authenticate();
+        $conversationId = $_GET['conversation_id'] ?? null;
 
         try {
-            // Get online users (this would typically check active sessions/WebSocket connections)
-            // For now, return empty array
+            $redis = RedisService::getInstance();
             $onlineUsers = [];
+
+            if ($redis->isConnected()) {
+                $pattern = $conversationId ? "online:{$conversationId}:*" : "online:*";
+                $client = $redis->getRedisInstance();
+                $keys = $client->keys($pattern);
+
+                foreach ($keys as $key) {
+                    $ttl = $client->ttl($key);
+                    if ($ttl <= 0) {
+                        $redis->delete($key);
+                        continue;
+                    }
+                    $parts = explode(':', $key);
+                    $uid = $parts[2] ?? null;
+                    if ($uid !== null) {
+                        $onlineUsers[] = (int)$uid;
+                    }
+                }
+
+                $onlineUsers = array_values(array_unique($onlineUsers));
+            }
 
             $this->respondSuccess([
                 'online_users' => $onlineUsers
