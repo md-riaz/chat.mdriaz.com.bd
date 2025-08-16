@@ -188,14 +188,18 @@ class MessageModel extends Model
     {
         $db = static::db();
 
+        $reactionsQuery = DB_TYPE === 'pgsql'
+            ? "(SELECT STRING_AGG(DISTINCT emoji, ',') FROM message_reactions WHERE message_id = m.id)"
+            : "(SELECT GROUP_CONCAT(DISTINCT emoji) FROM message_reactions WHERE message_id = m.id)";
+
         return $db->query(
-            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar," 
-            . " (SELECT COUNT(*) FROM message_reactions WHERE message_id = m.id) as reaction_count," 
-            . " (SELECT GROUP_CONCAT(DISTINCT emoji) FROM message_reactions WHERE message_id = m.id) as reactions" 
-            . " FROM messages m" 
-            . " JOIN users u ON m.sender_id = u.id" 
-            . " WHERE m.conversation_id = ?" 
-            . " ORDER BY m.created_at ASC" 
+            "SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar,"
+            . " (SELECT COUNT(*) FROM message_reactions WHERE message_id = m.id) as reaction_count,"
+            . " {$reactionsQuery} as reactions"
+            . " FROM messages m"
+            . " JOIN users u ON m.sender_id = u.id"
+            . " WHERE m.conversation_id = ?"
+            . " ORDER BY m.created_at ASC"
             . " LIMIT ? OFFSET ?",
             [$conversationId, $limit, $offset]
         )->fetchAll();
