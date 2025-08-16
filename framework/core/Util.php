@@ -171,4 +171,27 @@ class Util
 
         return round($bytes, $precision) . ' ' . $units[$pow];
     }
+
+    public static function log(string $message, array $context = []): void
+    {
+        if (!defined('LOGS_DIR')) {
+            return;
+        }
+
+        if (!is_dir(LOGS_DIR)) {
+            @mkdir(LOGS_DIR, 0755, true);
+        }
+
+        $date = date('Y-m-d');
+        $timestamp = date('Y-m-d H:i:s');
+        $logFile = LOGS_DIR . "/app-$date.log";
+
+        $entry = "[$timestamp] $message";
+        if (!empty($context)) {
+            $entry .= ' ' . json_encode($context);
+        }
+        $entry .= PHP_EOL;
+
+        file_put_contents($logFile, $entry, FILE_APPEND);
+    }
 }

@@ -7,6 +7,7 @@ use App\Api\Models\ConversationModel;
 use App\Api\Models\ConversationParticipantModel;
 use App\Api\Models\MessageModel;
 use App\Api\Models\UserModel;
+use Framework\Core\Util;
 
 class Chat extends ApiController
 {
@@ -25,6 +26,10 @@ class Chat extends ApiController
 
             $this->respondSuccess($conversations, 'Conversations retrieved successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/conversations'
+            ]);
             $this->respondError(500, 'Failed to retrieve conversations');
         }
     }
@@ -64,6 +69,10 @@ class Chat extends ApiController
                 'message_id' => $messageId
             ], 'Message sent successfully', 201);
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/send-message'
+            ]);
             $this->respondError(500, 'Failed to send message');
         }
     }
@@ -92,6 +101,10 @@ class Chat extends ApiController
 
             $this->respondSuccess($messages, 'Messages retrieved successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/messages'
+            ]);
             $this->respondError(500, 'Failed to retrieve messages');
         }
     }
@@ -134,6 +147,10 @@ class Chat extends ApiController
             ], 'Conversation created successfully', 201);
         } catch (\Exception $e) {
             $this->db->rollBack();
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/create-conversation'
+            ]);
             $this->respondError(500, 'Failed to create conversation');
         }
     }
@@ -157,6 +174,10 @@ class Chat extends ApiController
                 $this->respondSuccess(null, 'Reaction removed successfully');
             }
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/add-reaction'
+            ]);
             $this->respondError(500, 'Failed to add reaction');
         }
     }
@@ -176,6 +197,10 @@ class Chat extends ApiController
 
             $this->respondSuccess(null, 'Message marked as read');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/mark-as-read'
+            ]);
             $this->respondError(500, 'Failed to mark message as read');
         }
     }
@@ -206,6 +231,10 @@ class Chat extends ApiController
 
             $this->respondSuccess($messages, 'Messages found successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/search-messages'
+            ]);
             $this->respondError(500, 'Failed to search messages');
         }
     }
@@ -224,6 +253,10 @@ class Chat extends ApiController
                 'unread_count' => $totalUnread
             ], 'Unread count retrieved successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/unread-count'
+            ]);
             $this->respondError(500, 'Failed to get unread count');
         }
     }
@@ -249,6 +282,10 @@ class Chat extends ApiController
                 'typing_users' => $typingUsers
             ], 'Typing status retrieved successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/typing-status'
+            ]);
             $this->respondError(500, 'Failed to get typing status');
         }
     }
@@ -269,6 +306,10 @@ class Chat extends ApiController
 
             $this->respondSuccess(null, 'Typing status updated');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/set-typing'
+            ]);
             $this->respondError(500, 'Failed to update typing status');
         }
     }
@@ -289,6 +330,10 @@ class Chat extends ApiController
                 'online_users' => $onlineUsers
             ], 'Online users retrieved successfully');
         } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/online-users'
+            ]);
             $this->respondError(500, 'Failed to get online users');
         }
     }
