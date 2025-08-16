@@ -16,6 +16,9 @@ class Conversation extends ApiController
     public function index()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             // Use dataQuery for automatic pagination
@@ -33,7 +36,7 @@ class Conversation extends ApiController
 
             $result = ConversationModel::getUserConversationsPaginated($query, [$user['user_id']]);
 
-            $this->respondPaginated(
+            return $this->respondPaginated(
                 $result['items'],
                 $result['item_count'],
                 $result['page_number'],
@@ -41,7 +44,7 @@ class Conversation extends ApiController
                 'Conversations retrieved successfully'
             );
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve conversations');
+            return $this->respondError(500, 'Failed to retrieve conversations');
         }
     }
 
@@ -51,41 +54,49 @@ class Conversation extends ApiController
     public function create()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['type']);
+        if ($error = $this->validateRequired($data, ['type'])) {
+            return $error;
+        }
 
         // Validate conversation type
         if (!in_array($data['type'], ['direct', 'group'])) {
-            $this->respondError(400, 'Invalid conversation type. Must be "direct" or "group"');
+            return $this->respondError(400, 'Invalid conversation type. Must be "direct" or "group"');
         }
 
         // For direct conversations, validate participant
         if ($data['type'] === 'direct') {
-            $this->validateRequired($data, ['participant_id']);
+            if ($error = $this->validateRequired($data, ['participant_id'])) {
+                return $error;
+            }
 
             if ($data['participant_id'] == $user['user_id']) {
-                $this->respondError(400, 'Cannot create conversation with yourself');
+                return $this->respondError(400, 'Cannot create conversation with yourself');
             }
 
             // Check if direct conversation already exists
             $existing = ConversationModel::getDirectConversation($user['user_id'], $data['participant_id']);
             if ($existing) {
-                $this->respondSuccess($existing, 'Direct conversation already exists');
-                return;
+                return $this->respondSuccess($existing, 'Direct conversation already exists');
             }
         }
 
         // For group conversations, validate name and participants
         if ($data['type'] === 'group') {
-            $this->validateRequired($data, ['name', 'participant_ids']);
+            if ($error = $this->validateRequired($data, ['name', 'participant_ids'])) {
+                return $error;
+            }
 
             if (!is_array($data['participant_ids']) || count($data['participant_ids']) < 1) {
-                $this->respondError(400, 'At least 1 participant is required for group conversations');
+                return $this->respondError(400, 'At least 1 participant is required for group conversations');
             }
 
             if (in_array($user['user_id'], $data['participant_ids'])) {
-                $this->respondError(400, 'You are automatically added to the conversation');
+                return $this->respondError(400, 'You are automatically added to the conversation');
             }
         }
 
@@ -116,10 +127,10 @@ class Conversation extends ApiController
             // Get the created conversation with details
             $conversation = ConversationModel::getConversationDetails($conversationId, $user['user_id']);
 
-            $this->respondSuccess($conversation, 'Conversation created successfully', 201);
+            return $this->respondSuccess($conversation, 'Conversation created successfully', 201);
         } catch (\Exception $e) {
             $this->db->rollBack();
-            $this->respondError(500, 'Failed to create conversation');
+            return $this->respondError(500, 'Failed to create conversation');
         }
     }
 
@@ -129,26 +140,29 @@ class Conversation extends ApiController
     public function show($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            return $this->respondError(403, 'You are not a participant in this conversation');
         }
 
         try {
             $conversation = ConversationModel::getConversationDetails($id, $user['user_id']);
 
             if (!$conversation) {
-                $this->respondError(404, 'Conversation not found');
+                return $this->respondError(404, 'Conversation not found');
             }
 
-            $this->respondSuccess($conversation, 'Conversation retrieved successfully');
+            return $this->respondSuccess($conversation, 'Conversation retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve conversation');
+            return $this->respondError(500, 'Failed to retrieve conversation');
         }
     }
 
@@ -158,15 +172,18 @@ class Conversation extends ApiController
     public function update($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
         // Check if user is admin
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id'])) {
-            $this->respondError(403, 'Only admins can update conversation details');
+            return $this->respondError(403, 'Only admins can update conversation details');
         }
 
         $allowedFields = ['title'];
@@ -181,7 +198,7 @@ class Conversation extends ApiController
         }
 
         if (empty($updateFields)) {
-            $this->respondError(400, 'No valid fields to update');
+            return $this->respondError(400, 'No valid fields to update');
         }
 
         $updateFields[] = "updated_at = NOW()";
@@ -195,9 +212,9 @@ class Conversation extends ApiController
 
             $conversation = ConversationModel::getConversationDetails($id, $user['user_id']);
 
-            $this->respondSuccess($conversation, 'Conversation updated successfully');
+            return $this->respondSuccess($conversation, 'Conversation updated successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to update conversation');
+            return $this->respondError(500, 'Failed to update conversation');
         }
     }
 
@@ -207,14 +224,17 @@ class Conversation extends ApiController
     public function delete($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         // Check if user is admin
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id'])) {
-            $this->respondError(403, 'Only admins can delete conversations');
+            return $this->respondError(403, 'Only admins can delete conversations');
         }
 
         try {
@@ -228,10 +248,10 @@ class Conversation extends ApiController
 
             $this->db->commit();
 
-            $this->respondSuccess(null, 'Conversation deleted successfully');
+            return $this->respondSuccess(null, 'Conversation deleted successfully');
         } catch (\Exception $e) {
             $this->db->rollBack();
-            $this->respondError(500, 'Failed to delete conversation');
+            return $this->respondError(500, 'Failed to delete conversation');
         }
     }
 
@@ -241,22 +261,25 @@ class Conversation extends ApiController
     public function participants($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            return $this->respondError(403, 'You are not a participant in this conversation');
         }
 
         try {
             $participants = ConversationParticipantModel::getParticipants($id);
 
-            $this->respondSuccess($participants, 'Participants retrieved successfully');
+            return $this->respondSuccess($participants, 'Participants retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve participants');
+            return $this->respondError(500, 'Failed to retrieve participants');
         }
     }
 
@@ -266,21 +289,26 @@ class Conversation extends ApiController
     public function addParticipants($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['user_ids']);
+        if ($error = $this->validateRequired($data, ['user_ids'])) {
+            return $error;
+        }
 
         // Check if user is admin
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id'])) {
-            $this->respondError(403, 'Only admins can add participants');
+            return $this->respondError(403, 'Only admins can add participants');
         }
 
         if (!is_array($data['user_ids']) || empty($data['user_ids'])) {
-            $this->respondError(400, 'At least one user ID is required');
+            return $this->respondError(400, 'At least one user ID is required');
         }
 
         try {
@@ -296,13 +324,13 @@ class Conversation extends ApiController
 
             $this->db->commit();
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'added_users' => $addedUsers,
                 'total_added' => count($addedUsers)
             ], 'Participants added successfully');
         } catch (\Exception $e) {
             $this->db->rollBack();
-            $this->respondError(500, 'Failed to add participants');
+            return $this->respondError(500, 'Failed to add participants');
         }
     }
 
@@ -312,30 +340,35 @@ class Conversation extends ApiController
     public function removeParticipant($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
-        $this->validateRequired($data, ['user_id']);
+        if ($error = $this->validateRequired($data, ['user_id'])) {
+            return $error;
+        }
 
         $userId = $data['user_id'];
 
         // Check if current user is admin or removing themselves
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id']) && $user['user_id'] != $userId) {
-            $this->respondError(403, 'You can only remove yourself or you must be an admin');
+            return $this->respondError(403, 'You can only remove yourself or you must be an admin');
         }
 
         try {
             $result = ConversationParticipantModel::removeParticipant($id, $userId);
 
             if ($result) {
-                $this->respondSuccess(null, 'Participant removed successfully');
+                return $this->respondSuccess(null, 'Participant removed successfully');
             } else {
-                $this->respondError(404, 'Participant not found in conversation');
+                return $this->respondError(404, 'Participant not found in conversation');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to remove participant');
+            return $this->respondError(500, 'Failed to remove participant');
         }
     }
 
@@ -345,14 +378,17 @@ class Conversation extends ApiController
     public function markAsRead($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            return $this->respondError(403, 'You are not a participant in this conversation');
         }
 
         try {
@@ -366,9 +402,9 @@ class Conversation extends ApiController
                 ConversationParticipantModel::updateLastReadMessage($id, $user['user_id'], $latestMessage['id']);
             }
 
-            $this->respondSuccess(null, 'Conversation marked as read');
+            return $this->respondSuccess(null, 'Conversation marked as read');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to mark conversation as read');
+            return $this->respondError(500, 'Failed to mark conversation as read');
         }
     }
 }

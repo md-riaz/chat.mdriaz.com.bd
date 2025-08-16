@@ -41,7 +41,7 @@ class Status extends ApiController
         // Check if logs directory exists
         $status['services']['logs'] = is_dir(LOGS_DIR) && is_writable(LOGS_DIR) ? 'writable' : 'not_writable';
 
-        $this->respondSuccess($status, 'API health check completed');
+        return $this->respondSuccess($status, 'API health check completed');
     }
 
     /**
@@ -50,8 +50,11 @@ class Status extends ApiController
     public function auth()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
-        $this->respondSuccess([
+        return $this->respondSuccess([
             'authenticated' => true,
             'user_id' => $user['user_id'],
             'timestamp' => date('Y-m-d H:i:s')
@@ -67,15 +70,15 @@ class Status extends ApiController
             $result = $this->db->query("SELECT 1 as test")->fetchArray();
 
             if ($result && $result['test'] == 1) {
-                $this->respondSuccess([
+                return $this->respondSuccess([
                     'database' => 'connected',
                     'timestamp' => date('Y-m-d H:i:s')
                 ], 'Database connection successful');
             } else {
-                $this->respondError(500, 'Database connection failed');
+                return $this->respondError(500, 'Database connection failed');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Database connection error: ' . $e->getMessage());
+            return $this->respondError(500, 'Database connection error: ' . $e->getMessage());
         }
     }
 
@@ -85,8 +88,7 @@ class Status extends ApiController
     public function redis()
     {
         if (!class_exists('RedisService')) {
-            $this->respondError(500, 'Redis service not available');
-            return;
+            return $this->respondError(500, 'Redis service not available');
         }
 
         try {
@@ -102,19 +104,19 @@ class Status extends ApiController
                 $redis->delete($testKey);
 
                 if ($retrieved === $testValue) {
-                    $this->respondSuccess([
+                    return $this->respondSuccess([
                         'redis' => 'connected',
                         'operations' => 'working',
                         'timestamp' => date('Y-m-d H:i:s')
                     ], 'Redis connection and operations successful');
                 } else {
-                    $this->respondError(500, 'Redis operations failed');
+                    return $this->respondError(500, 'Redis operations failed');
                 }
             } else {
-                $this->respondError(500, 'Redis connection failed');
+                return $this->respondError(500, 'Redis connection failed');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Redis error: ' . $e->getMessage());
+            return $this->respondError(500, 'Redis error: ' . $e->getMessage());
         }
     }
 
@@ -131,14 +133,14 @@ class Status extends ApiController
 
         if ($connection) {
             fclose($connection);
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'websocket_server' => 'running',
                 'host' => $wsHost,
                 'port' => $wsPort,
                 'timestamp' => date('Y-m-d H:i:s')
             ], 'WebSocket server is running');
         } else {
-            $this->respondError(500, "WebSocket server not reachable on {$wsHost}:{$wsPort}");
+            return $this->respondError(500, "WebSocket server not reachable on {$wsHost}:{$wsPort}");
         }
     }
 }

@@ -14,18 +14,6 @@ abstract class ApiController extends Controller
     public function __construct()
     {
         $this->db = DBManager::getDB();
-
-        // Set JSON response headers
-        header('Content-Type: application/json');
-
-        // Handle CORS
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            header('Access-Control-Allow-Origin: *');
-            header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-            header('Access-Control-Allow-Headers: Content-Type, Authorization');
-            http_response_code(200);
-            exit;
-        }
     }
 
     /**
@@ -52,7 +40,7 @@ abstract class ApiController extends Controller
 
         if (!$user) {
             if ($required) {
-                $this->respondError(401, 'Authentication token required or invalid');
+                return $this->respondError(401, 'Authentication token required or invalid');
             }
             return null;
         }
@@ -77,9 +65,11 @@ abstract class ApiController extends Controller
     {
         foreach ($requiredFields as $field) {
             if (!isset($data[$field]) || $data[$field] === '' || $data[$field] === null) {
-                $this->respondError(400, "Field '{$field}' is required");
+                return $this->respondError(400, "Field '{$field}' is required");
             }
         }
+
+        return null;
     }
 
     /**
@@ -88,8 +78,10 @@ abstract class ApiController extends Controller
     protected function validateEmail($email)
     {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->respondError(400, 'Invalid email format');
+            return $this->respondError(400, 'Invalid email format');
         }
+
+        return null;
     }
 
     /**
@@ -98,8 +90,10 @@ abstract class ApiController extends Controller
     protected function validateArray($data, $field, $minLength = 1)
     {
         if (!isset($data[$field]) || !is_array($data[$field]) || count($data[$field]) < $minLength) {
-            $this->respondError(400, "Field '{$field}' must be an array with at least {$minLength} items");
+            return $this->respondError(400, "Field '{$field}' must be an array with at least {$minLength} items");
         }
+
+        return null;
     }
 
     /**
@@ -121,9 +115,8 @@ abstract class ApiController extends Controller
      */
     protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
     {
-        http_response_code($statusCode);
-
         $response = [
+            'status_code' => $statusCode,
             'success' => true,
             'message' => $message
         ];
@@ -132,8 +125,7 @@ abstract class ApiController extends Controller
             $response['data'] = $data;
         }
 
-        echo json_encode($response);
-        exit;
+        return $response;
     }
 
     /**
@@ -141,9 +133,8 @@ abstract class ApiController extends Controller
      */
     protected function respondError($statusCode, $message, $errors = null)
     {
-        http_response_code($statusCode);
-
         $response = [
+            'status_code' => $statusCode,
             'success' => false,
             'message' => $message
         ];
@@ -152,8 +143,7 @@ abstract class ApiController extends Controller
             $response['errors'] = $errors;
         }
 
-        echo json_encode($response);
-        exit;
+        return $response;
     }
 
     /**
@@ -163,7 +153,7 @@ abstract class ApiController extends Controller
     {
         $totalPages = ceil($total / $perPage);
 
-        $this->respondSuccess([
+        return $this->respondSuccess([
             'items' => $data,
             'pagination' => [
                 'current_page' => $page,

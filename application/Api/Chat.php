@@ -16,6 +16,9 @@ class Chat extends ApiController
     public function conversations()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $page = (int)($_GET['page'] ?? 1);
         $perPage = min((int)($_GET['per_page'] ?? 20), 100);
         $offset = ($page - 1) * $perPage;
@@ -23,9 +26,9 @@ class Chat extends ApiController
         try {
             $conversations = ConversationModel::getUserConversations($user['user_id'], $perPage, $offset);
 
-            $this->respondSuccess($conversations, 'Conversations retrieved successfully');
+            return $this->respondSuccess($conversations, 'Conversations retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve conversations');
+            return $this->respondError(500, 'Failed to retrieve conversations');
         }
     }
 
@@ -35,13 +38,17 @@ class Chat extends ApiController
     public function sendMessage()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['conversation_id', 'content']);
+        if ($error = $this->validateRequired($data, ['conversation_id', 'content'])) {
+            return $error;
+        }
 
         if (!ConversationParticipantModel::isParticipant($data['conversation_id'], $user['user_id'])) {
-            $this->respondError(403, 'User is not a participant of this conversation');
-            return;
+            return $this->respondError(403, 'User is not a participant of this conversation');
         }
 
         try {
@@ -60,11 +67,11 @@ class Chat extends ApiController
                 }
             }
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'message_id' => $messageId
             ], 'Message sent successfully', 201);
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to send message');
+            return $this->respondError(500, 'Failed to send message');
         }
     }
 
@@ -74,25 +81,27 @@ class Chat extends ApiController
     public function messages()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 50), 100);
         $offset = (int)($_GET['offset'] ?? 0);
 
         if (!$conversationId) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         if (!ConversationParticipantModel::isParticipant($conversationId, $user['user_id'])) {
-            $this->respondError(403, 'User is not a participant of this conversation');
-            return;
+            return $this->respondError(403, 'User is not a participant of this conversation');
         }
 
         try {
             $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $offset);
 
-            $this->respondSuccess($messages, 'Messages retrieved successfully');
+            return $this->respondSuccess($messages, 'Messages retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve messages');
+            return $this->respondError(500, 'Failed to retrieve messages');
         }
     }
 
@@ -102,9 +111,46 @@ class Chat extends ApiController
     public function createConversation()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['type']);
+        if ($error = $this->validateRequired($data, ['type'])) {
+            return $error;
+        }
+
+        // For direct conversations, validate participant
+        if ($data['type'] === 'direct') {
+            if ($error = $this->validateRequired($data, ['participant_id'])) {
+                return $error;
+            }
+
+            if ($data['participant_id'] == $user['user_id']) {
+                return $this->respondError(400, 'Cannot create conversation with yourself');
+            }
+
+            // Check if direct conversation already exists
+            $existing = ConversationModel::getDirectConversation($user['user_id'], $data['participant_id']);
+            if ($existing) {
+                return $this->respondSuccess($existing, 'Direct conversation already exists');
+            }
+        }
+
+        // For group conversations, validate name and participants
+        if ($data['type'] === 'group') {
+            if ($error = $this->validateRequired($data, ['name', 'participant_ids'])) {
+                return $error;
+            }
+
+            if (!is_array($data['participant_ids']) || count($data['participant_ids']) < 1) {
+                return $this->respondError(400, 'At least 1 participant is required for group conversations');
+            }
+
+            if (in_array($user['user_id'], $data['participant_ids'])) {
+                return $this->respondError(400, 'You are automatically added to the conversation');
+            }
+        }
 
         try {
             $this->db->beginTransaction();
@@ -129,12 +175,12 @@ class Chat extends ApiController
 
             $this->db->commit();
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'conversation_id' => $conversationId
             ], 'Conversation created successfully', 201);
         } catch (\Exception $e) {
             $this->db->rollBack();
-            $this->respondError(500, 'Failed to create conversation');
+            return $this->respondError(500, 'Failed to create conversation');
         }
     }
 
@@ -144,20 +190,25 @@ class Chat extends ApiController
     public function addReaction()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['message_id', 'emoji']);
+        if ($error = $this->validateRequired($data, ['message_id', 'emoji'])) {
+            return $error;
+        }
 
         try {
             $result = MessageModel::toggleReaction($data['message_id'], $user['user_id'], $data['emoji']);
 
             if ($result) {
-                $this->respondSuccess(null, 'Reaction added successfully');
+                return $this->respondSuccess(null, 'Reaction added successfully');
             } else {
-                $this->respondSuccess(null, 'Reaction removed successfully');
+                return $this->respondSuccess(null, 'Reaction removed successfully');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to add reaction');
+            return $this->respondError(500, 'Failed to add reaction');
         }
     }
 
@@ -167,16 +218,21 @@ class Chat extends ApiController
     public function markAsRead()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['message_id']);
+        if ($error = $this->validateRequired($data, ['message_id'])) {
+            return $error;
+        }
 
         try {
             MessageModel::markAsRead($data['message_id'], $user['user_id']);
 
-            $this->respondSuccess(null, 'Message marked as read');
+            return $this->respondSuccess(null, 'Message marked as read');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to mark message as read');
+            return $this->respondError(500, 'Failed to mark message as read');
         }
     }
 
@@ -186,13 +242,16 @@ class Chat extends ApiController
     public function searchMessages()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $query = $_GET['q'] ?? '';
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 20), 100);
         $offset = (int)($_GET['offset'] ?? 0);
 
         if (empty($query)) {
-            $this->respondError(400, 'Search query is required');
+            return $this->respondError(400, 'Search query is required');
         }
 
         try {
@@ -204,9 +263,9 @@ class Chat extends ApiController
                 $messages = MessageModel::searchUserMessages($user['user_id'], $query, $limit, $offset);
             }
 
-            $this->respondSuccess($messages, 'Messages found successfully');
+            return $this->respondSuccess($messages, 'Messages found successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to search messages');
+            return $this->respondError(500, 'Failed to search messages');
         }
     }
 
@@ -216,15 +275,18 @@ class Chat extends ApiController
     public function unreadCount()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             $totalUnread = ConversationModel::getTotalUnreadCount($user['user_id']);
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'unread_count' => $totalUnread
             ], 'Unread count retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to get unread count');
+            return $this->respondError(500, 'Failed to get unread count');
         }
     }
 
@@ -234,10 +296,13 @@ class Chat extends ApiController
     public function typingStatus()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $conversationId = $_GET['conversation_id'] ?? null;
 
         if (!$conversationId) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         try {
@@ -245,11 +310,11 @@ class Chat extends ApiController
             // For now, return empty array
             $typingUsers = [];
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'typing_users' => $typingUsers
             ], 'Typing status retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to get typing status');
+            return $this->respondError(500, 'Failed to get typing status');
         }
     }
 
@@ -259,17 +324,22 @@ class Chat extends ApiController
     public function setTyping()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['conversation_id', 'is_typing']);
+        if ($error = $this->validateRequired($data, ['conversation_id', 'is_typing'])) {
+            return $error;
+        }
 
         try {
             // Store typing status (this would typically be cached/stored in Redis)
             // For now, just acknowledge the request
 
-            $this->respondSuccess(null, 'Typing status updated');
+            return $this->respondSuccess(null, 'Typing status updated');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to update typing status');
+            return $this->respondError(500, 'Failed to update typing status');
         }
     }
 
@@ -279,17 +349,20 @@ class Chat extends ApiController
     public function onlineUsers()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             // Get online users (this would typically check active sessions/WebSocket connections)
             // For now, return empty array
             $onlineUsers = [];
 
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'online_users' => $onlineUsers
             ], 'Online users retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to get online users');
+            return $this->respondError(500, 'Failed to get online users');
         }
     }
 }

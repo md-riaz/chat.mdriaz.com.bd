@@ -16,14 +16,17 @@ namespace App\Api\Models {
     }
 }
 
-namespace App\Api {
-    abstract class ApiController {}
+namespace Framework\Core {
+    class Controller {}
+    class DBManager { public static function getDB() { return new class {}; } }
+    class Auth { public static function currentUser() { return null; } }
 }
 
 namespace Tests {
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../application/Api/ApiController.php';
 require_once __DIR__ . '/../application/Api/Chat.php';
 
 class ChatSearchMessagesTest extends TestCase
@@ -40,27 +43,16 @@ class ChatSearchMessagesTest extends TestCase
         $_GET['conversation_id'] = 5;
 
         $chat = new class extends \App\Api\Chat {
-            public $statusCode;
             public function __construct() {}
             protected function authenticate($required = true)
             {
                 return ['user_id' => 99];
             }
-            protected function respondError($statusCode, $message, $errors = null)
-            {
-                $this->statusCode = $statusCode;
-                throw new \Exception('error');
-            }
-            protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
-            {
-                $this->statusCode = $statusCode;
-                return $data;
-            }
         };
-        $chat->searchMessages();
+        $result = $chat->searchMessages();
 
         $this->assertEquals('searchConversationMessages', \App\Api\Models\MessageModel::$lastCalled['method']);
-        $this->assertEquals(200, $chat->statusCode);
+        $this->assertEquals(200, $result['status_code']);
     }
 
     public function testSearchMessagesWithoutConversationIdCallsUserMethod(): void
@@ -68,27 +60,16 @@ class ChatSearchMessagesTest extends TestCase
         $_GET['q'] = 'hello';
 
         $chat = new class extends \App\Api\Chat {
-            public $statusCode;
             public function __construct() {}
             protected function authenticate($required = true)
             {
                 return ['user_id' => 99];
             }
-            protected function respondError($statusCode, $message, $errors = null)
-            {
-                $this->statusCode = $statusCode;
-                throw new \Exception('error');
-            }
-            protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
-            {
-                $this->statusCode = $statusCode;
-                return $data;
-            }
         };
-        $chat->searchMessages();
+        $result = $chat->searchMessages();
 
         $this->assertEquals('searchUserMessages', \App\Api\Models\MessageModel::$lastCalled['method']);
-        $this->assertEquals(200, $chat->statusCode);
+        $this->assertEquals(200, $result['status_code']);
     }
 }
 }

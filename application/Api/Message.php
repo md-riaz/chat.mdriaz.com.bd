@@ -16,16 +16,19 @@ class Message extends ApiController
     public function index()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $conversationId = $_GET['conversation_id'] ?? null;
         $search = $_GET['search'] ?? '';
 
         if (!$conversationId) {
-            $this->respondError(400, 'Conversation ID is required');
+            return $this->respondError(400, 'Conversation ID is required');
         }
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($conversationId, $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            return $this->respondError(403, 'You are not a participant in this conversation');
         }
 
         try {
@@ -49,7 +52,7 @@ class Message extends ApiController
 
             $result = MessageModel::getMessagesPaginated($query, $params);
 
-            $this->respondPaginated(
+            return $this->respondPaginated(
                 $result['items'],
                 $result['item_count'],
                 $result['page_number'],
@@ -57,7 +60,7 @@ class Message extends ApiController
                 'Messages retrieved successfully'
             );
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve messages');
+            return $this->respondError(500, 'Failed to retrieve messages');
         }
     }
 
@@ -67,13 +70,18 @@ class Message extends ApiController
     public function create()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['conversation_id', 'content']);
+        if ($error = $this->validateRequired($data, ['conversation_id', 'content'])) {
+            return $error;
+        }
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($data['conversation_id'], $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            return $this->respondError(403, 'You are not a participant in this conversation');
         }
 
         try {
@@ -115,10 +123,10 @@ class Message extends ApiController
             // Get the created message with details
             $message = MessageModel::getMessageWithDetails($messageId);
 
-            $this->respondSuccess($message, 'Message sent successfully', 201);
+            return $this->respondSuccess($message, 'Message sent successfully', 201);
         } catch (\Exception $e) {
             $this->db->rollBack();
-            $this->respondError(500, 'Failed to send message');
+            return $this->respondError(500, 'Failed to send message');
         }
     }
 
@@ -128,26 +136,29 @@ class Message extends ApiController
     public function show($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Message ID is required');
+            return $this->respondError(400, 'Message ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             $message = MessageModel::getMessageWithDetails($id);
 
             if (!$message) {
-                $this->respondError(404, 'Message not found');
+                return $this->respondError(404, 'Message not found');
             }
 
             // Check if user has access to this message
             if (!ConversationParticipantModel::isParticipant($message['conversation_id'], $user['user_id'])) {
-                $this->respondError(403, 'You do not have access to this message');
+                return $this->respondError(403, 'You do not have access to this message');
             }
 
-            $this->respondSuccess($message, 'Message retrieved successfully');
+            return $this->respondSuccess($message, 'Message retrieved successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to retrieve message');
+            return $this->respondError(500, 'Failed to retrieve message');
         }
     }
 
@@ -157,13 +168,18 @@ class Message extends ApiController
     public function update($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Message ID is required');
+            return $this->respondError(400, 'Message ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['content']);
+        if ($error = $this->validateRequired($data, ['content'])) {
+            return $error;
+        }
 
         try {
             // Check if message exists and user is the sender
@@ -173,11 +189,11 @@ class Message extends ApiController
             )->fetchArray();
 
             if (!$message) {
-                $this->respondError(404, 'Message not found');
+                return $this->respondError(404, 'Message not found');
             }
 
             if ($message['sender_id'] != $user['user_id']) {
-                $this->respondError(403, 'You can only edit your own messages');
+                return $this->respondError(403, 'You can only edit your own messages');
             }
 
             // Update message
@@ -189,9 +205,9 @@ class Message extends ApiController
             // Get updated message
             $updatedMessage = MessageModel::getMessageWithDetails($id);
 
-            $this->respondSuccess($updatedMessage, 'Message updated successfully');
+            return $this->respondSuccess($updatedMessage, 'Message updated successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to update message');
+            return $this->respondError(500, 'Failed to update message');
         }
     }
 
@@ -201,10 +217,13 @@ class Message extends ApiController
     public function delete($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Message ID is required');
+            return $this->respondError(400, 'Message ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             // Check if message exists and user is the sender
@@ -214,11 +233,11 @@ class Message extends ApiController
             )->fetchArray();
 
             if (!$message) {
-                $this->respondError(404, 'Message not found');
+                return $this->respondError(404, 'Message not found');
             }
 
             if ($message['sender_id'] != $user['user_id']) {
-                $this->respondError(403, 'You can only delete your own messages');
+                return $this->respondError(403, 'You can only delete your own messages');
             }
 
             // Soft delete message (for now just update timestamp, can add status column later)
@@ -227,9 +246,9 @@ class Message extends ApiController
                 [$id]
             );
 
-            $this->respondSuccess(null, 'Message deleted successfully');
+            return $this->respondSuccess(null, 'Message deleted successfully');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to delete message');
+            return $this->respondError(500, 'Failed to delete message');
         }
     }
 
@@ -239,13 +258,18 @@ class Message extends ApiController
     public function reaction($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Message ID is required');
+            return $this->respondError(400, 'Message ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['emoji']);
+        if ($error = $this->validateRequired($data, ['emoji'])) {
+            return $error;
+        }
 
         try {
             // Check if message exists and user has access
@@ -255,23 +279,23 @@ class Message extends ApiController
             )->fetchArray();
 
             if (!$message) {
-                $this->respondError(404, 'Message not found');
+                return $this->respondError(404, 'Message not found');
             }
 
             if (!ConversationParticipantModel::isParticipant($message['conversation_id'], $user['user_id'])) {
-                $this->respondError(403, 'You do not have access to this message');
+                return $this->respondError(403, 'You do not have access to this message');
             }
 
             $result = MessageModel::toggleReaction($id, $user['user_id'], $data['emoji']);
 
             $action = $result ? 'added' : 'removed';
-            $this->respondSuccess([
+            return $this->respondSuccess([
                 'action' => $action,
                 'message_id' => $id,
                 'emoji' => $data['emoji']
             ], "Reaction {$action} successfully");
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to process reaction');
+            return $this->respondError(500, 'Failed to process reaction');
         }
     }
 
@@ -281,10 +305,13 @@ class Message extends ApiController
     public function markAsRead($id = null)
     {
         if (!$id) {
-            $this->respondError(400, 'Message ID is required');
+            return $this->respondError(400, 'Message ID is required');
         }
 
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         try {
             // Check if message exists and user has access
@@ -294,18 +321,18 @@ class Message extends ApiController
             )->fetchArray();
 
             if (!$message) {
-                $this->respondError(404, 'Message not found');
+                return $this->respondError(404, 'Message not found');
             }
 
             if (!ConversationParticipantModel::isParticipant($message['conversation_id'], $user['user_id'])) {
-                $this->respondError(403, 'You do not have access to this message');
+                return $this->respondError(403, 'You do not have access to this message');
             }
 
             MessageModel::markAsRead($id, $user['user_id']);
 
-            $this->respondSuccess(null, 'Message marked as read');
+            return $this->respondSuccess(null, 'Message marked as read');
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to mark message as read');
+            return $this->respondError(500, 'Failed to mark message as read');
         }
     }
 
@@ -315,9 +342,12 @@ class Message extends ApiController
     public function upload()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
 
         if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
-            $this->respondError(400, 'No valid file uploaded');
+            return $this->respondError(400, 'No valid file uploaded');
         }
 
         $file = $_FILES['file'];
@@ -325,7 +355,7 @@ class Message extends ApiController
         // Validate file size (max 50MB)
         $maxSize = 50 * 1024 * 1024;
         if ($file['size'] > $maxSize) {
-            $this->respondError(400, 'File too large. Maximum size is 50MB');
+            return $this->respondError(400, 'File too large. Maximum size is 50MB');
         }
 
         // Get file extension and MIME type
@@ -353,7 +383,7 @@ class Message extends ApiController
         ];
 
         if (!isset($allowedTypes[$extension]) || !in_array($mimeType, $allowedTypes[$extension])) {
-            $this->respondError(400, 'File type not allowed');
+            return $this->respondError(400, 'File type not allowed');
         }
 
         try {
@@ -379,7 +409,7 @@ class Message extends ApiController
                     $file['name']
                 );
 
-                $this->respondSuccess([
+                return $this->respondSuccess([
                     'attachment_id' => $attachmentId,
                     'file_url' => $fileUrl,
                     'file_type' => $file['type'],
@@ -387,10 +417,10 @@ class Message extends ApiController
                     'original_name' => $file['name']
                 ], 'File uploaded successfully');
             } else {
-                $this->respondError(500, 'Failed to save uploaded file');
+                return $this->respondError(500, 'Failed to save uploaded file');
             }
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to upload file');
+            return $this->respondError(500, 'Failed to upload file');
         }
     }
 
@@ -400,10 +430,13 @@ class Message extends ApiController
     public function search()
     {
         $user = $this->authenticate();
+        if (isset($user["status_code"])) {
+            return $user;
+        }
         $query = $_GET['q'] ?? '';
 
         if (empty($query)) {
-            $this->respondError(400, 'Search query is required');
+            return $this->respondError(400, 'Search query is required');
         }
 
         try {
@@ -418,7 +451,7 @@ class Message extends ApiController
 
             $result = MessageModel::getMessagesPaginated($searchQuery, [$user['user_id'], "%{$query}%"]);
 
-            $this->respondPaginated(
+            return $this->respondPaginated(
                 $result['items'],
                 $result['item_count'],
                 $result['page_number'],
@@ -426,7 +459,7 @@ class Message extends ApiController
                 'Messages found successfully'
             );
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to search messages');
+            return $this->respondError(500, 'Failed to search messages');
         }
     }
 }

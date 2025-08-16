@@ -24,14 +24,17 @@ namespace App\Api\Models {
     }
 }
 
-namespace App\Api {
-    abstract class ApiController {}
+namespace Framework\Core {
+    class Controller {}
+    class DBManager { public static function getDB() { return new class {}; } }
+    class Auth { public static function currentUser() { return null; } }
 }
 
 namespace Tests {
 
 use PHPUnit\Framework\TestCase;
 
+require_once __DIR__ . '/../application/Api/ApiController.php';
 require_once __DIR__ . '/../application/Api/Chat.php';
 
 class ChatUnreadCountTest extends TestCase
@@ -46,33 +49,20 @@ class ChatUnreadCountTest extends TestCase
     public function testUnreadCountUsesAggregateMethod(): void
     {
         $chat = new class extends \App\Api\Chat {
-            public $statusCode;
-            public $data;
             public function __construct() {}
             protected function authenticate($required = true)
             {
                 return ['user_id' => 99];
             }
-            protected function respondError($statusCode, $message, $errors = null)
-            {
-                $this->statusCode = $statusCode;
-                throw new \Exception('error');
-            }
-            protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
-            {
-                $this->statusCode = $statusCode;
-                $this->data = $data;
-                return $data;
-            }
         };
 
-        $chat->unreadCount();
+        $result = $chat->unreadCount();
 
         $this->assertTrue(\App\Api\Models\ConversationModel::$totalCalled);
         $this->assertFalse(\App\Api\Models\ConversationModel::$getUserCalled);
         $this->assertFalse(\App\Api\Models\ConversationModel::$getUnreadCalled);
-        $this->assertEquals(200, $chat->statusCode);
-        $this->assertEquals(150, $chat->data['unread_count']);
+        $this->assertEquals(200, $result['status_code']);
+        $this->assertEquals(150, $result['data']['unread_count']);
     }
 }
 }
