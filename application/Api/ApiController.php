@@ -19,8 +19,21 @@ abstract class ApiController extends Controller
         header('Content-Type: application/json');
 
         // Handle CORS
+        $allowedOrigins = is_array(ALLOWED_ORIGINS)
+            ? ALLOWED_ORIGINS
+            : array_map('trim', explode(',', ALLOWED_ORIGINS));
+
+        $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+        if ($origin) {
+            if (in_array($origin, $allowedOrigins, true)) {
+                header('Access-Control-Allow-Origin: ' . $origin);
+            } else {
+                http_response_code(403);
+                exit;
+            }
+        }
+
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            header('Access-Control-Allow-Origin: *');
             header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
             header('Access-Control-Allow-Headers: Content-Type, Authorization');
             http_response_code(200);
