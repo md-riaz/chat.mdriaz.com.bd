@@ -171,4 +171,34 @@ class Util
 
         return round($bytes, $precision) . ' ' . $units[$pow];
     }
+
+    public static function log(string $message, array $context = []): void
+    {
+        if (!defined('LOGS_DIR')) {
+            return;
+        }
+
+        if (!is_dir(LOGS_DIR)) {
+            @mkdir(LOGS_DIR, 0755, true);
+        }
+
+        $date = date('Y-m-d');
+        $timestamp = date('Y-m-d H:i:s');
+        $logFile = LOGS_DIR . "/app-$date.log";
+
+        $entry = "[$timestamp] $message";
+        if (!empty($context)) {
+            $json = json_encode($context);
+            if ($json === false) {
+                $entry .= ' [context encoding error: ' . json_last_error_msg() . ']';
+            } else {
+                $entry .= ' ' . $json;
+            }
+        }
+        $entry .= PHP_EOL;
+
+        if (file_put_contents($logFile, $entry, FILE_APPEND) === false) {
+            error_log("Failed to write log entry to $logFile");
+        }
+    }
 }
