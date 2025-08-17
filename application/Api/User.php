@@ -12,7 +12,7 @@ class User extends ApiController
     /**
      * GET /api/user - List all users with pagination and search
      */
-    public function Index()
+    public function index()
     {
         $search = $_GET['search'] ?? '';
 
@@ -47,7 +47,7 @@ class User extends ApiController
     /**
      * GET /api/user/{id} - Get a specific user
      */
-    public function Show($id = null)
+    public function show($id = null)
     {
         if (!$id) {
             $this->respondError(400, 'User ID is required');
@@ -67,7 +67,7 @@ class User extends ApiController
     /**
      * PUT /api/user/{id} - Update a user
      */
-    public function Update($id = null)
+    public function update($id = null)
     {
         if (!$id) {
             $this->respondError(400, 'User ID is required');
@@ -121,7 +121,7 @@ class User extends ApiController
     /**
      * DELETE /api/user/{id} - Soft delete a user
      */
-    public function Delete($id = null)
+    public function delete($id = null)
     {
         if (!$id) {
             $this->respondError(400, 'User ID is required');
@@ -157,9 +157,9 @@ class User extends ApiController
     }
 
     /**
-     * POST /api/user/{id}/UploadAvatar - Upload user avatar
+     * POST /api/user/{id}/uploadAvatar - Upload user avatar
      */
-    public function UploadAvatar($id = null)
+    public function uploadAvatar($id = null)
     {
         if (!$id) {
             $this->respondError(400, 'User ID is required');
@@ -232,9 +232,9 @@ class User extends ApiController
     }
 
     /**
-     * GET /api/user/Search - Search users (for adding to conversations)
+     * GET /api/user/search - Search users (for adding to conversations)
      */
-    public function Search()
+    public function search()
     {
         $query = $_GET['q'] ?? '';
         $limit = min((int)($_GET['limit'] ?? 10), 50);
@@ -251,9 +251,9 @@ class User extends ApiController
     }
 
     /**
-     * GET /api/user/Me - Get current authenticated user info
+     * GET /api/user/me - Get current authenticated user info
      */
-    public function Me()
+    public function me()
     {
         $user = $this->authenticate();
 
@@ -267,9 +267,9 @@ class User extends ApiController
     }
 
     /**
-     * POST /api/user/Login - User login (merged from Auth controller)
+     * POST /api/user/login - User login (merged from Auth controller)
      */
-    public function Login()
+    public function login()
     {
         $data = $this->getJsonInput();
         $this->validateRequired($data, ['email', 'password']);
@@ -316,9 +316,9 @@ class User extends ApiController
     }
 
     /**
-     * POST /api/user/Register - User registration (merged from Auth controller)
+     * POST /api/user/register - User registration (merged from Auth controller)
      */
-    public function Register()
+    public function register()
     {
         $data = $this->getJsonInput();
         $this->validateRequired($data, ['name', 'email', 'username', 'password']);
@@ -373,9 +373,9 @@ class User extends ApiController
     }
 
     /**
-     * POST /api/user/Logout - User logout (merged from Auth controller)
+     * POST /api/user/logout - User logout (merged from Auth controller)
      */
-    public function Logout()
+    public function logout()
     {
         $user = $this->authenticate();
         $token = $this->getAuthToken();
@@ -388,9 +388,9 @@ class User extends ApiController
     }
 
     /**
-     * POST /api/user/Refresh - Refresh token (merged from Auth controller)
+     * POST /api/user/refresh - Refresh token (merged from Auth controller)
      */
-    public function Refresh()
+    public function refresh()
     {
         $user = $this->authenticate();
 

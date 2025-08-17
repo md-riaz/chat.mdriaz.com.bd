@@ -102,7 +102,7 @@ Configuration values are loaded from `.env.local`. Important options include:
 #### User Registration
 
 ```bash
-curl -X POST http://your-domain.com/api/user/Register \
+curl -X POST http://your-domain.com/api/user/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
@@ -115,7 +115,7 @@ curl -X POST http://your-domain.com/api/user/Register \
 #### User Login
 
 ```bash
-curl -X POST http://your-domain.com/api/user/Login \
+curl -X POST http://your-domain.com/api/user/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
@@ -141,11 +141,11 @@ curl -X POST http://your-domain.com/api/message \
 
 | Method | Endpoint             | Description                  |
 | ------ | -------------------- | ---------------------------- |
-| POST   | `/api/user/Register` | Register new user            |
-| POST   | `/api/user/Login`    | User login                   |
-| POST   | `/api/user/Logout`   | User logout                  |
-| POST   | `/api/user/Refresh`  | Refresh authentication token |
-| GET    | `/api/user/Me`       | Get current user info        |
+| POST   | `/api/user/register` | Register new user            |
+| POST   | `/api/user/login`    | User login                   |
+| POST   | `/api/user/logout`   | User logout                  |
+| POST   | `/api/user/refresh`  | Refresh authentication token |
+| GET    | `/api/user/me`       | Get current user info        |
 
 ### User Management
 
@@ -155,8 +155,8 @@ curl -X POST http://your-domain.com/api/message \
 | GET    | `/api/user/{id}`              | Get user by ID         |
 | PUT    | `/api/user/{id}`              | Update user profile    |
 | DELETE | `/api/user/{id}`              | Delete user account    |
-| GET    | `/api/user/Search`            | Search users           |
-| POST   | `/api/user/{id}/UploadAvatar` | Upload user avatar     |
+| GET    | `/api/user/search`            | Search users           |
+| POST   | `/api/user/{id}/uploadAvatar` | Upload user avatar     |
 
 ### Conversations
 
