@@ -192,6 +192,8 @@ class Util
         }
         $entry .= PHP_EOL;
 
-        file_put_contents($logFile, $entry, FILE_APPEND);
+        if (file_put_contents($logFile, $entry, FILE_APPEND) === false) {
+            error_log("Failed to write log entry to $logFile");
+        }
     }
 }
