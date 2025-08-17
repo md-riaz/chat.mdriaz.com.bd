@@ -19,6 +19,9 @@ abstract class ApiController extends Controller
         header('Content-Type: application/json');
 
         // Handle CORS
+        // ALLOWED_ORIGINS should be defined as a global constant, either as an array of allowed origins
+        // (e.g., ['https://example.com', 'https://another.com']) or as a comma-separated string
+        // (e.g., 'https://example.com,https://another.com'). Define it in your configuration file or bootstrap.
         $allowedOrigins = is_array(ALLOWED_ORIGINS)
             ? ALLOWED_ORIGINS
             : array_map('trim', explode(',', ALLOWED_ORIGINS));
