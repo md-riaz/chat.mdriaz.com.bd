@@ -15,7 +15,7 @@ class UserModel extends Model
      * @param array $params bound params for WHERE
      * @return array { items, item_count, page_number, item_limit }
      */
-    public static function GetUsers(string $baseQuery, array $params = []): array
+    public static function getUsers(string $baseQuery, array $params = []): array
     {
         $db = static::db();
         return $db->dataQuery($baseQuery, $params);

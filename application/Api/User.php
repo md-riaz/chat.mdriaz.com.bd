@@ -33,7 +33,7 @@ class User extends ApiController
                   FROM users {$whereClause} 
                   ORDER BY created_at DESC";
 
-        $result = UserModel::GetUsers($query, $params);
+        $result = UserModel::getUsers($query, $params);
 
         $this->respondPaginated(
             $result['items'],
