@@ -49,12 +49,10 @@ class ChatService
         }
 
         // Get user details
-        $user = $this->db->query(
-            "SELECT id, name, email, username, avatar_url FROM users WHERE id = ?",
-            [$tokenData['user_id']]
-        )->fetchArray();
+        $user = UserModel::find($tokenData['user_id']);
 
         if ($user) {
+            $user = $user->toArray();
             $user['user_id'] = $user['id']; // For compatibility
             return $user;
         }
