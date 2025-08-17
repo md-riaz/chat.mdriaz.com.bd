@@ -67,7 +67,13 @@ abstract class ApiController extends Controller
     protected function getJsonInput()
     {
         $json = file_get_contents('php://input');
-        return json_decode($json, true) ?? [];
+        $data = json_decode($json, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->respondError(400, 'Invalid JSON body');
+        }
+
+        return $data ?? [];
     }
 
     /**
