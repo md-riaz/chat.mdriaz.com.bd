@@ -188,7 +188,12 @@ class Util
 
         $entry = "[$timestamp] $message";
         if (!empty($context)) {
-            $entry .= ' ' . json_encode($context);
+            $json = json_encode($context);
+            if ($json === false) {
+                $entry .= ' [context encoding error: ' . json_last_error_msg() . ']';
+            } else {
+                $entry .= ' ' . $json;
+            }
         }
         $entry .= PHP_EOL;
 
