@@ -89,13 +89,7 @@ class User extends ApiController
         foreach ($allowedFields as $field) {
             if (isset($data[$field])) {
                 if ($field === 'username' && !empty($data[$field])) {
-                    // Check username uniqueness
-                    $existing = $this->db->query(
-                        "SELECT id FROM users WHERE username = ? AND id != ? AND deleted_at IS NULL",
-                        [$data[$field], $id]
-                    )->fetchArray();
-
-                    if ($existing) {
+                    if (UserModel::usernameExists($data[$field], $id)) {
                         $this->respondError(400, 'Username already taken');
                     }
 
