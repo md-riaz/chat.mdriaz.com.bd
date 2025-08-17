@@ -4,7 +4,7 @@ class Framework
 {
 
     private static $defaultController = 'Home';
-    private static $defaultMethod = 'Index';
+    private static $defaultMethod = 'index';
     private static $currentController;
     private static $currentMethod;
     private static $currentParams = [];

@@ -14,7 +14,7 @@ https://yourdomain.com/api/
 
 ## Authentication
 
-All API endpoints (except auth endpoints) require Bearer token authentication.
+All API endpoints (except login and register) require Bearer token authentication.
 
 ### Headers
 
@@ -27,7 +27,7 @@ Content-Type: application/json
 
 ## Authentication Endpoints
 
-### POST /api/auth/login
+### POST /api/user/login
 
 Login user and get access token.
 
@@ -62,7 +62,7 @@ Login user and get access token.
 }
 ```
 
-### POST /api/auth/register
+### POST /api/user/register
 
 Register a new user.
 
@@ -78,15 +78,15 @@ Register a new user.
 }
 ```
 
-### POST /api/auth/logout
+### POST /api/user/logout
 
 Logout and revoke access token.
 
-### POST /api/auth/refresh
+### POST /api/user/refresh
 
 Refresh access token.
 
-### GET /api/auth/me
+### GET /api/user/me
 
 Get current authenticated user information.
 
@@ -126,7 +126,7 @@ Update user profile.
 
 Soft delete user account.
 
-### POST /api/user/{id}/upload-avatar
+### POST /api/user/{id}/uploadAvatar
 
 Upload user avatar image.
 
