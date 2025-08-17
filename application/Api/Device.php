@@ -67,10 +67,10 @@ class Device extends ApiController
         $data = $this->getJsonInput();
 
         // Check if device belongs to user
-        $device = $this->db->query(
-            "SELECT id FROM user_devices WHERE device_id = ? AND user_id = ?",
-            [$deviceId, $user['user_id']]
-        )->fetchArray();
+        $device = DeviceModel::first([
+            'device_id' => $deviceId,
+            'user_id' => $user['user_id'],
+        ]);
 
         if (!$device) {
             $this->respondError(404, 'Device not found');
@@ -174,18 +174,18 @@ class Device extends ApiController
 
         try {
             // Get device FCM token
-            $device = $this->db->query(
-                "SELECT fcm_token FROM user_devices WHERE device_id = ? AND user_id = ?",
-                [$deviceId, $user['user_id']]
-            )->fetchArray();
+            $device = DeviceModel::first([
+                'device_id' => $deviceId,
+                'user_id' => $user['user_id'],
+            ]);
 
-            if (!$device || empty($device['fcm_token'])) {
+            if (!$device || empty($device->fcm_token)) {
                 $this->respondError(404, 'Device not found or FCM token not available');
             }
 
             // Here you would typically send a push notification using FCM
             // For now, just simulate success
-            $notificationSent = true; // DeviceModel::sendPushNotification($device['fcm_token'], 'Test Notification', 'This is a test notification');
+            $notificationSent = true; // DeviceModel::sendPushNotification($device->fcm_token, 'Test Notification', 'This is a test notification');
 
             if ($notificationSent) {
                 $this->respondSuccess(null, 'Test notification sent successfully');
