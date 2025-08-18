@@ -275,14 +275,16 @@ class User extends ApiController
         $this->validateRequired($data, ['email', 'password']);
 
         // Try to find user by email or username
-        $user = UserModel::getUserByEmail($data['email']);
-        if (!$user) {
-            $user = UserModel::getUserByUsername($data['email']);
+        $userModel = UserModel::getUserByEmail($data['email']);
+        if (!$userModel) {
+            $userModel = UserModel::getUserByUsername($data['email']);
         }
 
-        if (!$user || !password_verify($data['password'], $user['password'])) {
+        if (!$userModel || !password_verify($data['password'], $userModel->password)) {
             $this->respondError(401, 'Invalid credentials');
         }
+
+        $user = $userModel->toArray();
 
         // Register/update device if provided
         if (!empty($data['device_id'])) {

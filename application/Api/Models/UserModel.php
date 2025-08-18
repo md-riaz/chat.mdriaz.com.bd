@@ -86,8 +86,15 @@ class UserModel extends Model
             return null;
         }
 
-        $user = static::find((int) $tokenData['user_id']);
-        return $user?->toArray();
+        return [
+            'user_id'    => (int) $tokenData['user_id'],
+            'name'       => $tokenData['name'],
+            'email'      => $tokenData['email'],
+            'username'   => $tokenData['username'],
+            'avatar_url' => $tokenData['avatar_url'] ?? null,
+            'session_id' => (int) $tokenData['session_id'],
+            'token'      => $tokenData['token'],
+        ];
     }
 
     /**

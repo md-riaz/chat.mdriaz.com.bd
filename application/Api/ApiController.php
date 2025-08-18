@@ -48,15 +48,7 @@ abstract class ApiController extends Controller
      */
     protected function authenticate($required = true)
     {
-        $user = CoreAuth::currentUser();
-
-        if (!$user) {
-            if ($required) {
-                $this->respondError(401, 'Authentication token required or invalid');
-            }
-            return null;
-        }
-
+        $user = $required ? CoreAuth::requireAuth() : CoreAuth::currentUser();
         $this->currentUser = $user;
         return $user;
     }
