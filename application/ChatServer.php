@@ -13,7 +13,9 @@ class ChatServer implements MessageComponentInterface
      */
     private \SplObjectStorage $clients;
 
-    private $redisClient = null;
+    private $redisFactory = null;
+
+    private string $redisUri = '';
 
     public function __construct()
     {
@@ -21,7 +23,7 @@ class ChatServer implements MessageComponentInterface
 
         if (class_exists('\\Clue\\React\\Redis\\Factory')) {
             $loop = \React\EventLoop\Loop::get();
-            $factory = new \Clue\React\Redis\Factory($loop);
+            $this->redisFactory = new \Clue\React\Redis\Factory($loop);
 
             $uri = 'redis://';
             if (defined('REDIS_PASSWORD') && REDIS_PASSWORD !== '') {
@@ -32,20 +34,7 @@ class ChatServer implements MessageComponentInterface
                 $uri .= '/' . REDIS_DATABASE;
             }
 
-            $factory->createLazyClient($uri)->then(function ($client) {
-                $this->redisClient = $client;
-                $client->on('message', function ($channel, $payload) {
-                    if (preg_match('/^user:(\d+)$/', $channel, $matches)) {
-                        $userId = (int)$matches[1];
-                        foreach ($this->clients as $conn) {
-                            $info = $this->clients[$conn];
-                            if ($info['userId'] === $userId && $info['subscribed']) {
-                                $conn->send($payload);
-                            }
-                        }
-                    }
-                });
-            });
+            $this->redisUri = $uri;
         }
     }
 
@@ -68,7 +57,6 @@ class ChatServer implements MessageComponentInterface
 
         $this->clients->attach($conn, [
             'userId' => (int)$user['id'],
-            'subscribed' => false,
         ]);
 
         echo "Connection opened: #{$conn->resourceId} user {$user['id']}\n";
@@ -77,45 +65,39 @@ class ChatServer implements MessageComponentInterface
     private function subscribeUser(ConnectionInterface $conn): void
     {
         $info = $this->clients[$conn];
-        if ($info['subscribed']) {
+        if (isset($info['redisClient'])) {
             return;
         }
-        $info['subscribed'] = true;
-        $this->clients[$conn] = $info;
 
-        if ($this->redisClient) {
-            foreach ($this->clients as $otherConn) {
-                if ($otherConn !== $conn) {
-                    $otherInfo = $this->clients[$otherConn];
-                    if ($otherInfo['userId'] === $info['userId'] && $otherInfo['subscribed']) {
-                        return;
-                    }
-                }
-            }
-            $this->redisClient->subscribe('user:' . $info['userId']);
+        if ($this->redisFactory) {
+            $channel = 'user:' . $info['userId'];
+            $this->redisFactory->createClient($this->redisUri)->then(function ($client) use ($conn, $channel) {
+                $client->subscribe($channel);
+                $client->on('message', function (string $chan, string $payload) use ($conn) {
+                    $conn->send($payload);
+                });
+
+                $info = $this->clients[$conn];
+                $info['redisClient'] = $client;
+                $this->clients[$conn] = $info;
+            });
         }
     }
 
     private function unsubscribeUser(ConnectionInterface $conn): void
     {
         $info = $this->clients[$conn];
-        if (!$info['subscribed']) {
+        if (!isset($info['redisClient'])) {
             return;
         }
-        $info['subscribed'] = false;
-        $this->clients[$conn] = $info;
 
-        if ($this->redisClient) {
-            foreach ($this->clients as $otherConn) {
-                if ($otherConn !== $conn) {
-                    $otherInfo = $this->clients[$otherConn];
-                    if ($otherInfo['userId'] === $info['userId'] && $otherInfo['subscribed']) {
-                        return;
-                    }
-                }
-            }
-            $this->redisClient->unsubscribe('user:' . $info['userId']);
-        }
+        $client = $info['redisClient'];
+        $client->unsubscribe('user:' . $info['userId'])->then(function () use ($client) {
+            $client->close();
+        });
+        unset($info['redisClient']);
+
+        $this->clients[$conn] = $info;
     }
 
     public function onMessage(ConnectionInterface $from, $msg): void
