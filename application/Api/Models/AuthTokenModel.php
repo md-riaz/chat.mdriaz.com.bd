@@ -35,7 +35,8 @@ class AuthTokenModel extends Model
         $db = static::db();
 
         return $db->query(
-            "SELECT at.*, u.id as user_id, u.name, u.email, u.username"
+            "SELECT at.id as session_id, at.token, at.user_id, at.ip_address, at.user_agent,"
+            . " at.device_id, at.created_at, at.expires_at, u.name, u.email, u.username, u.avatar_url"
             . " FROM auth_tokens at"
             . " JOIN users u ON at.user_id = u.id"
             . " WHERE at.token = ?"
