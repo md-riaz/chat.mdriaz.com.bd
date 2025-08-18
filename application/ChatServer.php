@@ -5,6 +5,7 @@ namespace App;
 use Ratchet\ConnectionInterface;
 use Ratchet\MessageComponentInterface;
 use App\Api\Models\UserModel;
+use React\EventLoop\Loop;
 
 class ChatServer implements MessageComponentInterface
 {
@@ -27,12 +28,22 @@ class ChatServer implements MessageComponentInterface
 
     private string $redisUri = '';
 
+    /**
+     * Interval in seconds between heartbeat pings
+     */
+    private int $heartbeatInterval = 30;
+
+    /**
+     * How long to wait for a pong response before timing out
+     */
+    private int $heartbeatTimeout = 60;
+
     public function __construct()
     {
         $this->clients = new \SplObjectStorage();
 
         if (class_exists('\\Clue\\React\\Redis\\Factory')) {
-            $loop = \React\EventLoop\Loop::get();
+            $loop = Loop::get();
             $this->redisFactory = new \Clue\React\Redis\Factory($loop);
 
             $uri = 'redis://';
@@ -59,6 +70,19 @@ class ChatServer implements MessageComponentInterface
                 });
             });
         }
+
+        Loop::addPeriodicTimer($this->heartbeatInterval, function () {
+            $now = time();
+            foreach ($this->clients as $conn) {
+                $info = $this->clients[$conn];
+                $lastPong = $info['lastPong'] ?? $now;
+                if ($now - $lastPong >= $this->heartbeatTimeout) {
+                    $conn->close();
+                    continue;
+                }
+                $conn->send(json_encode(['type' => 'ping']));
+            }
+        });
     }
 
     public function onOpen(ConnectionInterface $conn): void
@@ -81,6 +105,7 @@ class ChatServer implements MessageComponentInterface
         $userId = (int)$user['id'];
         $this->clients->attach($conn, [
             'userId' => $userId,
+            'lastPong' => time(),
         ]);
 
         if (!isset($this->userSockets[$userId])) {
@@ -93,7 +118,12 @@ class ChatServer implements MessageComponentInterface
 
     public function onMessage(ConnectionInterface $from, $msg): void
     {
-        // This server does not handle messages sent by clients.
+        $data = json_decode($msg, true);
+        if (isset($data['type']) && $data['type'] === 'pong' && $this->clients->contains($from)) {
+            $info = $this->clients[$from];
+            $info['lastPong'] = time();
+            $this->clients[$from] = $info;
+        }
     }
 
     public function onClose(ConnectionInterface $conn): void
