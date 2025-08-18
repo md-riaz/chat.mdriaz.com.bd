@@ -66,6 +66,19 @@ class Chat extends ApiController
                 }
             }
 
+            // Publish message event to WebSocket subscribers
+            $message = MessageModel::getMessageWithDetails($messageId);
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = RedisService::getInstance();
+                if ($redis->isConnected()) {
+                    $redis->publish('chat_events', json_encode([
+                        'conversation_id' => $data['conversation_id'],
+                        'type' => 'message_created',
+                        'payload' => $message
+                    ]));
+                }
+            }
+
             $this->respondSuccess([
                 'message_id' => $messageId
             ], 'Message sent successfully', 201);
@@ -142,6 +155,19 @@ class Chat extends ApiController
             }
 
             $this->db->commit();
+
+            // Publish conversation event to WebSocket subscribers
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = RedisService::getInstance();
+                if ($redis->isConnected()) {
+                    $conversation = ConversationModel::getConversationById($conversationId);
+                    $redis->publish('chat_events', json_encode([
+                        'conversation_id' => $conversationId,
+                        'type' => 'conversation_created',
+                        'payload' => $conversation
+                    ]));
+                }
+            }
 
             $this->respondSuccess([
                 'conversation_id' => $conversationId
