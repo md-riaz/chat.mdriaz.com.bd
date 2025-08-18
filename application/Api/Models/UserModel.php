@@ -3,6 +3,7 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use App\Api\Models\AuthTokenModel;
 
 class UserModel extends Model
 {
@@ -73,6 +74,20 @@ class UserModel extends Model
         ]);
         $user->save();
         return $user->id;
+    }
+
+    /**
+     * Validate authentication token and return user data
+     */
+    public static function validateToken(string $token): ?array
+    {
+        $tokenData = AuthTokenModel::validateToken($token);
+        if (!$tokenData) {
+            return null;
+        }
+
+        $user = static::find((int) $tokenData['user_id']);
+        return $user?->toArray();
     }
 
     /**
