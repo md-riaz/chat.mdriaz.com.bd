@@ -38,6 +38,16 @@ class ChatServer implements MessageComponentInterface
      */
     private int $heartbeatTimeout = 60;
 
+    /**
+     * Number of reconnect attempts for Redis subscription
+     */
+    private int $reconnectAttempts = 0;
+
+    /**
+     * Maximum delay between reconnection attempts in seconds
+     */
+    private int $maxReconnectDelay = 30;
+
     public function __construct()
     {
         $this->clients = new \SplObjectStorage();
@@ -57,18 +67,7 @@ class ChatServer implements MessageComponentInterface
 
             $this->redisUri = $uri;
 
-            $this->redisFactory->createClient($this->redisUri)->then(function ($client) {
-                $this->redisSubscriber = $client;
-                $client->psubscribe('user:*');
-                $client->on('pmessage', function ($pattern, $channel, $payload) {
-                    $userId = (int)substr($channel, strpos($channel, ':') + 1);
-                    if (isset($this->userSockets[$userId])) {
-                        foreach ($this->userSockets[$userId] as $socket) {
-                            $socket->send($payload);
-                        }
-                    }
-                });
-            });
+            $this->connectRedis();
         }
 
         Loop::addPeriodicTimer($this->heartbeatInterval, function () {
@@ -82,6 +81,66 @@ class ChatServer implements MessageComponentInterface
                 }
                 $conn->send(json_encode(['type' => 'ping']));
             }
+        });
+    }
+
+    private function connectRedis(): void
+    {
+        if ($this->redisFactory === null) {
+            return;
+        }
+
+        $this->redisFactory->createClient($this->redisUri)->then(function ($client) {
+            $this->reconnectAttempts = 0;
+            $this->redisSubscriber = $client;
+
+            $client->on('close', function () {
+                $this->handleSubscriptionIssue('Redis connection closed');
+            });
+
+            $client->on('error', function ($e) {
+                $this->handleSubscriptionIssue('Redis error: ' . $e->getMessage());
+            });
+
+            $client->psubscribe('user:*')->otherwise(function ($e) {
+                $this->handleSubscriptionIssue('Redis subscription failed: ' . $e->getMessage());
+            });
+
+            $client->on('pmessage', function ($pattern, $channel, $payload) {
+                $userId = (int)substr($channel, strpos($channel, ':') + 1);
+                if (isset($this->userSockets[$userId])) {
+                    foreach ($this->userSockets[$userId] as $socket) {
+                        $socket->send($payload);
+                    }
+                }
+            });
+        })->otherwise(function ($e) {
+            $this->handleSubscriptionIssue('Redis connection failed: ' . $e->getMessage());
+        });
+    }
+
+    private function handleSubscriptionIssue(string $message): void
+    {
+        echo $message . "\n";
+
+        if ($this->redisSubscriber !== null) {
+            $this->redisSubscriber->close();
+            $this->redisSubscriber = null;
+        }
+
+        foreach ($this->clients as $conn) {
+            $conn->send(json_encode(['type' => 'subscription_error', 'message' => $message]));
+        }
+
+        $this->scheduleReconnect();
+    }
+
+    private function scheduleReconnect(): void
+    {
+        $delay = min(pow(2, $this->reconnectAttempts), $this->maxReconnectDelay);
+        $this->reconnectAttempts++;
+        Loop::addTimer($delay, function () {
+            $this->connectRedis();
         });
     }
 
