@@ -4,19 +4,21 @@ namespace App;
 
 use Ratchet\ConnectionInterface;
 use Ratchet\MessageComponentInterface;
-use App\WebSocket\Subscriber;
 use App\Api\Models\UserModel;
 
 class ChatServer implements MessageComponentInterface
 {
-    /** @var array<int,Subscriber> */
-    private array $subscribers = [];
+    /**
+     * Active client connections keyed by the connection object
+     */
+    private \SplObjectStorage $clients;
 
-    /** @var array<int,array<int,Subscriber>> */
-    private array $conversations = [];
+    private $redisClient = null;
 
     public function __construct()
     {
+        $this->clients = new \SplObjectStorage();
+
         if (class_exists('\\Clue\\React\\Redis\\Factory')) {
             $loop = \React\EventLoop\Loop::get();
             $factory = new \Clue\React\Redis\Factory($loop);
@@ -31,18 +33,16 @@ class ChatServer implements MessageComponentInterface
             }
 
             $factory->createLazyClient($uri)->then(function ($client) {
-                $client->subscribe('chat_events');
+                $this->redisClient = $client;
                 $client->on('message', function ($channel, $payload) {
-                    $event = json_decode($payload, true);
-                    if (!isset($event['conversation_id'])) {
-                        return;
-                    }
-                    $conversationId = (int)$event['conversation_id'];
-                    if (!isset($this->conversations[$conversationId])) {
-                        return;
-                    }
-                    foreach ($this->conversations[$conversationId] as $subscriber) {
-                        $subscriber->connection->send($payload);
+                    if (preg_match('/^user:(\d+)$/', $channel, $matches)) {
+                        $userId = (int)$matches[1];
+                        foreach ($this->clients as $conn) {
+                            $info = $this->clients[$conn];
+                            if ($info['userId'] === $userId && $info['subscribed']) {
+                                $conn->send($payload);
+                            }
+                        }
                     }
                 });
             });
@@ -66,58 +66,82 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
-        $subscriber = new Subscriber((int)$user['id'], $conn);
-        $this->subscribers[$conn->resourceId] = $subscriber;
+        $this->clients->attach($conn, [
+            'userId' => (int)$user['id'],
+            'subscribed' => false,
+        ]);
 
-        if (!empty($params['conversation_id'])) {
-            $this->subscribeToConversation($subscriber, (int)$params['conversation_id']);
+        echo "Connection opened: #{$conn->resourceId} user {$user['id']}\n";
+    }
+
+    private function subscribeUser(ConnectionInterface $conn): void
+    {
+        $info = $this->clients[$conn];
+        if ($info['subscribed']) {
+            return;
         }
+        $info['subscribed'] = true;
+        $this->clients[$conn] = $info;
 
-        echo "Connection opened: #{$conn->resourceId} user {$subscriber->userId}\n";
+        if ($this->redisClient) {
+            foreach ($this->clients as $otherConn) {
+                if ($otherConn !== $conn) {
+                    $otherInfo = $this->clients[$otherConn];
+                    if ($otherInfo['userId'] === $info['userId'] && $otherInfo['subscribed']) {
+                        return;
+                    }
+                }
+            }
+            $this->redisClient->subscribe('user:' . $info['userId']);
+        }
     }
 
-    private function subscribeToConversation(Subscriber $subscriber, int $conversationId): void
+    private function unsubscribeUser(ConnectionInterface $conn): void
     {
-        $subscriber->subscribe($conversationId);
-        $this->conversations[$conversationId][$subscriber->connection->resourceId] = $subscriber;
-    }
+        $info = $this->clients[$conn];
+        if (!$info['subscribed']) {
+            return;
+        }
+        $info['subscribed'] = false;
+        $this->clients[$conn] = $info;
 
-    private function unsubscribeFromConversation(Subscriber $subscriber, int $conversationId): void
-    {
-        $subscriber->unsubscribe($conversationId);
-        unset($this->conversations[$conversationId][$subscriber->connection->resourceId]);
-        if (empty($this->conversations[$conversationId])) {
-            unset($this->conversations[$conversationId]);
+        if ($this->redisClient) {
+            foreach ($this->clients as $otherConn) {
+                if ($otherConn !== $conn) {
+                    $otherInfo = $this->clients[$otherConn];
+                    if ($otherInfo['userId'] === $info['userId'] && $otherInfo['subscribed']) {
+                        return;
+                    }
+                }
+            }
+            $this->redisClient->unsubscribe('user:' . $info['userId']);
         }
     }
 
     public function onMessage(ConnectionInterface $from, $msg): void
     {
-        $subscriber = $this->subscribers[$from->resourceId] ?? null;
-        if (!$subscriber) {
+        if (!$this->clients->contains($from)) {
             return;
         }
+
         $data = json_decode($msg, true);
         if (!is_array($data)) {
             return;
         }
+
         $action = $data['action'] ?? null;
-        $conversationId = isset($data['conversation_id']) ? (int)$data['conversation_id'] : null;
-        if ($action === 'subscribe' && $conversationId !== null) {
-            $this->subscribeToConversation($subscriber, $conversationId);
-        } elseif ($action === 'unsubscribe' && $conversationId !== null) {
-            $this->unsubscribeFromConversation($subscriber, $conversationId);
+        if ($action === 'subscribe') {
+            $this->subscribeUser($from);
+        } elseif ($action === 'unsubscribe') {
+            $this->unsubscribeUser($from);
         }
     }
 
     public function onClose(ConnectionInterface $conn): void
     {
-        $subscriber = $this->subscribers[$conn->resourceId] ?? null;
-        if ($subscriber) {
-            foreach ($subscriber->getSubscriptions() as $conversationId) {
-                $this->unsubscribeFromConversation($subscriber, (int)$conversationId);
-            }
-            unset($this->subscribers[$conn->resourceId]);
+        if ($this->clients->contains($conn)) {
+            $this->unsubscribeUser($conn);
+            $this->clients->detach($conn);
         }
         echo "Connection {$conn->resourceId} closed\n";
     }
