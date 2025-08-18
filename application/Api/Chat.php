@@ -66,16 +66,19 @@ class Chat extends ApiController
                 }
             }
 
-            // Publish message event to WebSocket subscribers
+            // Publish message event to WebSocket subscribers using user channels
             $message = MessageModel::getMessageWithDetails($messageId);
             if (class_exists('\\App\\Api\\Services\\RedisService')) {
                 $redis = RedisService::getInstance();
                 if ($redis->isConnected()) {
-                    $redis->publish('chat_events', json_encode([
-                        'conversation_id' => $data['conversation_id'],
-                        'type' => 'message_created',
-                        'payload' => $message
-                    ]));
+                    $participants = ConversationModel::getConversationParticipants($data['conversation_id']);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $data['conversation_id'],
+                            'type' => 'message_created',
+                            'payload' => $message
+                        ]));
+                    }
                 }
             }
 
@@ -156,16 +159,19 @@ class Chat extends ApiController
 
             $this->db->commit();
 
-            // Publish conversation event to WebSocket subscribers
+            // Publish conversation event to WebSocket subscribers using user channels
             if (class_exists('\\App\\Api\\Services\\RedisService')) {
                 $redis = RedisService::getInstance();
                 if ($redis->isConnected()) {
                     $conversation = ConversationModel::getConversationById($conversationId);
-                    $redis->publish('chat_events', json_encode([
-                        'conversation_id' => $conversationId,
-                        'type' => 'conversation_created',
-                        'payload' => $conversation
-                    ]));
+                    $participants = ConversationModel::getConversationParticipants($conversationId);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $conversationId,
+                            'type' => 'conversation_created',
+                            'payload' => $conversation
+                        ]));
+                    }
                 }
             }
 
