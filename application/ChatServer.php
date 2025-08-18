@@ -13,7 +13,17 @@ class ChatServer implements MessageComponentInterface
      */
     private \SplObjectStorage $clients;
 
+    /**
+     * Map of user IDs to their active websocket connections
+     *
+     * @var array<int, array<int, ConnectionInterface>>
+     */
+    private array $userSockets = [];
+
     private $redisFactory = null;
+
+    /** @var \Clue\React\Redis\Client|null */
+    private $redisSubscriber = null;
 
     private string $redisUri = '';
 
@@ -35,6 +45,19 @@ class ChatServer implements MessageComponentInterface
             }
 
             $this->redisUri = $uri;
+
+            $this->redisFactory->createClient($this->redisUri)->then(function ($client) {
+                $this->redisSubscriber = $client;
+                $client->psubscribe('user:*');
+                $client->on('pmessage', function ($pattern, $channel, $payload) {
+                    $userId = (int)substr($channel, strpos($channel, ':') + 1);
+                    if (isset($this->userSockets[$userId])) {
+                        foreach ($this->userSockets[$userId] as $socket) {
+                            $socket->send($payload);
+                        }
+                    }
+                });
+            });
         }
     }
 
@@ -55,74 +78,33 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
+        $userId = (int)$user['id'];
         $this->clients->attach($conn, [
-            'userId' => (int)$user['id'],
+            'userId' => $userId,
         ]);
+
+        if (!isset($this->userSockets[$userId])) {
+            $this->userSockets[$userId] = [];
+        }
+        $this->userSockets[$userId][$conn->resourceId] = $conn;
 
         echo "Connection opened: #{$conn->resourceId} user {$user['id']}\n";
     }
 
-    private function subscribeUser(ConnectionInterface $conn): void
-    {
-        $info = $this->clients[$conn];
-        if (isset($info['redisClient'])) {
-            return;
-        }
-
-        if ($this->redisFactory) {
-            $channel = 'user:' . $info['userId'];
-            $this->redisFactory->createClient($this->redisUri)->then(function ($client) use ($conn, $channel) {
-                $client->subscribe($channel);
-                $client->on('message', function (string $chan, string $payload) use ($conn) {
-                    $conn->send($payload);
-                });
-
-                $info = $this->clients[$conn];
-                $info['redisClient'] = $client;
-                $this->clients[$conn] = $info;
-            });
-        }
-    }
-
-    private function unsubscribeUser(ConnectionInterface $conn): void
-    {
-        $info = $this->clients[$conn];
-        if (!isset($info['redisClient'])) {
-            return;
-        }
-
-        $client = $info['redisClient'];
-        $client->unsubscribe('user:' . $info['userId'])->then(function () use ($client) {
-            $client->close();
-        });
-        unset($info['redisClient']);
-
-        $this->clients[$conn] = $info;
-    }
-
     public function onMessage(ConnectionInterface $from, $msg): void
     {
-        if (!$this->clients->contains($from)) {
-            return;
-        }
-
-        $data = json_decode($msg, true);
-        if (!is_array($data)) {
-            return;
-        }
-
-        $action = $data['action'] ?? null;
-        if ($action === 'subscribe') {
-            $this->subscribeUser($from);
-        } elseif ($action === 'unsubscribe') {
-            $this->unsubscribeUser($from);
-        }
+        // This server does not handle messages sent by clients.
     }
 
     public function onClose(ConnectionInterface $conn): void
     {
         if ($this->clients->contains($conn)) {
-            $this->unsubscribeUser($conn);
+            $info = $this->clients[$conn];
+            $userId = $info['userId'];
+            unset($this->userSockets[$userId][$conn->resourceId]);
+            if (empty($this->userSockets[$userId])) {
+                unset($this->userSockets[$userId]);
+            }
             $this->clients->detach($conn);
         }
         echo "Connection {$conn->resourceId} closed\n";
