@@ -45,6 +45,14 @@
             color: #333;
         }
 
+        .pending {
+            opacity: 0.6;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
         #send {
             width: 80%;
         }
@@ -134,7 +142,13 @@
                 if (data.type === 'message_created' && data.conversation_id === CONVERSATION_ID) {
                     const m = data.payload;
                     const sender = (m.sender && m.sender.username) || 'User';
-                    addMsg(sender === currentUser.username ? 'Me' : sender, m.content, sender === currentUser.username ? 'me' : 'other');
+                    const isMe = sender === currentUser.username;
+                    if (isMe) {
+                        const pending = Array.from(messagesDiv.querySelectorAll('.msg.me'))
+                            .find(div => div.textContent === `Me: ${m.content}`);
+                        if (pending) pending.remove();
+                    }
+                    addMsg(isMe ? 'Me' : sender, m.content, isMe ? 'me' : 'other');
                 }
             };
         }
@@ -142,18 +156,37 @@
         sendBtn.onclick = sendMessage;
         sendInput.onkeydown = function (e) { if (e.key === 'Enter') sendMessage(); };
 
-        async function sendMessage() {
+        function sendMessage() {
             const msg = sendInput.value.trim();
             if (!msg) return;
-            await fetch('/api/chat/send-message', {
+
+            const pendingDiv = addMsg('Me', msg, 'me pending');
+
+            sendInput.value = '';
+
+            fetch('/api/chat/send-message', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + token
                 },
                 body: JSON.stringify({ conversation_id: CONVERSATION_ID, content: msg })
-            });
-            sendInput.value = '';
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        pendingDiv.classList.remove('pending');
+                    } else {
+                        pendingDiv.classList.remove('pending');
+                        pendingDiv.classList.add('error');
+                        alert(result.message || 'Failed to send message');
+                    }
+                })
+                .catch(() => {
+                    pendingDiv.classList.remove('pending');
+                    pendingDiv.classList.add('error');
+                    alert('Failed to send message');
+                });
         }
 
         function addMsg(from, msg, cls = '') {
@@ -162,6 +195,7 @@
             div.textContent = `${from}: ${msg}`;
             messagesDiv.appendChild(div);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return div;
         }
     </script>
 </body>

@@ -44,6 +44,7 @@ class Chat extends ApiController
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['conversation_id', 'content']);
+        $tempId = $data['temp_id'] ?? null;
 
         if (!ConversationParticipantModel::isParticipant($data['conversation_id'], $user['user_id'])) {
             $this->respondError(403, 'User is not a participant of this conversation');
@@ -68,6 +69,9 @@ class Chat extends ApiController
 
             // Publish message event to WebSocket subscribers using user channels
             $message = MessageModel::getMessageWithDetails($messageId);
+            if ($tempId !== null) {
+                $message['temp_id'] = $tempId;
+            }
             if (class_exists('\\App\\Api\\Services\\RedisService')) {
                 $redis = RedisService::getInstance();
                 if ($redis->isConnected()) {
@@ -83,7 +87,8 @@ class Chat extends ApiController
             }
 
             $this->respondSuccess([
-                'message_id' => $messageId
+                'message_id' => $messageId,
+                'temp_id' => $tempId
             ], 'Message sent successfully', 201);
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
