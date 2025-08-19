@@ -108,15 +108,25 @@ class ChatServer implements MessageComponentInterface
 
             $client->on('pmessage', function ($pattern, $channel, $payload) {
                 $userId = (int)substr($channel, strpos($channel, ':') + 1);
-                if (isset($this->userSockets[$userId])) {
-                    foreach ($this->userSockets[$userId] as $socket) {
-                        $socket->send($payload);
-                    }
-                }
+                $this->broadcastToUser($userId, $payload);
             });
         })->otherwise(function ($e) {
             $this->handleSubscriptionIssue('Redis connection failed: ' . $e->getMessage());
         });
+    }
+
+    /**
+     * Send a payload to all active sockets for a given user
+     */
+    private function broadcastToUser(int $userId, string $payload): void
+    {
+        if (!isset($this->userSockets[$userId])) {
+            return;
+        }
+
+        foreach ($this->userSockets[$userId] as $socket) {
+            $socket->send($payload);
+        }
     }
 
     private function handleSubscriptionIssue(string $message): void
