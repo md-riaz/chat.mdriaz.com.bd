@@ -20,12 +20,17 @@ class Chat extends ApiController
         $user = $this->authenticate();
         $page = (int)($_GET['page'] ?? 1);
         $perPage = min((int)($_GET['per_page'] ?? 20), 100);
-        $offset = ($page - 1) * $perPage;
 
         try {
-            $conversations = ConversationModel::getUserConversations($user['user_id'], $perPage, $offset);
+            $result = ConversationModel::getUserConversationsPaginated($user['user_id'], $page, $perPage);
 
-            $this->respondSuccess($conversations, 'Conversations retrieved successfully');
+            $this->respondPaginated(
+                $result['items'],
+                $result['total'],
+                $page,
+                $perPage,
+                'Conversations retrieved successfully'
+            );
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
                 'user_id' => $user['user_id'],

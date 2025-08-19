@@ -18,32 +18,23 @@ class Conversation extends ApiController
         $user = $this->authenticate();
 
         try {
-            // Use dataQuery for automatic pagination
-            $query = "SELECT c.*, 
-                             cp.last_read_message_id,
-                             cp.role,
-                             (SELECT COUNT(*) FROM conversation_participants cp2 WHERE cp2.conversation_id = c.id) as participant_count,
-                             (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
-                             (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_time,
-                             (SELECT u.name FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_sender_name
-                      FROM conversations c
-                      JOIN conversation_participants cp ON c.id = cp.conversation_id
-                      WHERE cp.user_id = ?
-                      ORDER BY last_message_time IS NULL, last_message_time DESC";
+            $page = (int)($_GET['page'] ?? 1);
+            $perPage = min((int)($_GET['per_page'] ?? 20), 100);
 
-            $result = ConversationModel::getUserConversationsPaginated($query, [$user['user_id']]);
+            $result = ConversationModel::getUserConversationsPaginated($user['user_id'], $page, $perPage);
 
             $this->respondPaginated(
                 $result['items'],
-                $result['item_count'],
-                $result['page_number'],
-                $result['item_limit'],
+                $result['total'],
+                $page,
+                $perPage,
                 'Conversations retrieved successfully'
             );
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to retrieve conversations');
         }
     }
+
 
     /**
      * POST /api/conversation - Create a new conversation
