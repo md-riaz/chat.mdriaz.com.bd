@@ -356,7 +356,38 @@ Search messages across all conversations.
 
 ### GET /api/chat/conversations
 
-Get user's conversations.
+Get user's conversations with pagination.
+
+**Query Parameters:**
+
+- `page` (int): Page number
+- `per_page` (int): Items per page
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversations retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "title": "Project Team",
+        "unread_count": 2
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 40,
+      "total_pages": 2,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
 
 ### POST /api/chat/send-message
 
