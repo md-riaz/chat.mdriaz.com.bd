@@ -68,6 +68,7 @@ The system uses the following core tables:
 
    ```bash
    mysql -u your_username -p < chat.sql
+   mysql -u your_username -p chat < chat_seed.sql
    ```
 
 3. **Configure the application**
@@ -85,6 +86,15 @@ The system uses the following core tables:
      ```bash
      php bin/chat-server.php
      ```
+
+### Demo Credentials
+
+The seed file creates two demo users:
+
+| Name       | Email             | Username | Password    |
+| ---------- | ----------------- | -------- | ----------- |
+| Alice Demo | alice@example.com | alice    | password123 |
+| Bob Demo   | bob@example.com   | bob      | password123 |
 
 ### Environment Variables
 

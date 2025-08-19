@@ -11,6 +11,7 @@ https://yourdomain.com/api/
 - Configure environment variables in `.env.local` (database, Redis, WebSocket)
 - Ensure MySQL and Redis servers are running
 - Start the WebSocket server with `php bin/chat-server.php` for real-time features
+- Optional: import `chat_seed.sql` for demo data (`alice@example.com` / `password123` and `bob@example.com` / `password123`)
 
 ## Authentication
 
