@@ -156,6 +156,7 @@ class ChatServer implements MessageComponentInterface
 
     public function onOpen(ConnectionInterface $conn): void
     {
+
         $queryString = '';
         if (isset($conn->httpRequest)) {
             $queryString = $conn->httpRequest->getUri()->getQuery();

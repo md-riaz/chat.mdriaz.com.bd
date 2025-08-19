@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Demo Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+        }
+
+        #login,
+        #chat {
+            max-width: 400px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #chat {
+            display: none;
+        }
+
+        #messages {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+
+        .msg {
+            margin-bottom: 8px;
+        }
+
+        .me {
+            color: #007bff;
+        }
+
+        .other {
+            color: #333;
+        }
+
+        #send {
+            width: 80%;
+        }
+
+        #sendBtn {
+            width: 18%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="login">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Enter your name" autofocus>
+        <button id="loginBtn">Login</button>
+    </div>
+    <div id="chat">
+        <h2>Chat with Fixed User</h2>
+        <div id="messages"></div>
+        <input type="text" id="send" placeholder="Type a message">
+        <button id="sendBtn">Send</button>
+    </div>
+    <script>
+        const loginDiv = document.getElementById('login');
+        const chatDiv = document.getElementById('chat');
+        const usernameInput = document.getElementById('username');
+        const loginBtn = document.getElementById('loginBtn');
+        const messagesDiv = document.getElementById('messages');
+        const sendInput = document.getElementById('send');
+        const sendBtn = document.getElementById('sendBtn');
+
+        let ws;
+        let username = '';
+        const fixedUser = 'demo_user'; // The user you always chat with
+
+        loginBtn.onclick = function () {
+            username = usernameInput.value.trim();
+            if (!username) return alert('Please enter your name');
+            loginDiv.style.display = 'none';
+            chatDiv.style.display = 'block';
+            connectWS();
+        };
+
+        function connectWS() {
+            ws = new WebSocket('ws://localhost:8080/chat');
+            ws.onopen = function () {
+                addMsg('System', 'Connected to chat server');
+            };
+            ws.onmessage = function (e) {
+                let data;
+                try { data = JSON.parse(e.data); } catch { return; }
+                if (data.type === 'chat') {
+                    addMsg(data.from === username ? 'Me' : data.from, data.message, data.from === username ? 'me' : 'other');
+                } else if (data.type === 'connection') {
+                    addMsg('System', data.message);
+                }
+            };
+            ws.onclose = function () {
+                addMsg('System', 'Disconnected');
+            };
+        }
+
+        sendBtn.onclick = sendMessage;
+        sendInput.onkeydown = function (e) { if (e.key === 'Enter') sendMessage(); };
+
+        function sendMessage() {
+            const msg = sendInput.value.trim();
+            if (!msg || !ws || ws.readyState !== 1) return;
+            ws.send(JSON.stringify({ type: 'chat', from: username, to: fixedUser, message: msg }));
+            sendInput.value = '';
+        }
+
+        function addMsg(from, msg, cls = '') {
+            const div = document.createElement('div');
+            div.className = 'msg ' + cls;
+            div.textContent = `${from}: ${msg}`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+
+</html>
