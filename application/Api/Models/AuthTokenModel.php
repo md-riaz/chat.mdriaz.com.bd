@@ -60,19 +60,21 @@ class AuthTokenModel extends Model
 
     public static function revokeUserTokens($userId, $exceptToken = null)
     {
-        $db = static::db();
+        $conditions = [['user_id', '=', $userId]];
 
         if ($exceptToken) {
-            return $db->query(
-                "UPDATE auth_tokens SET revoked_at = NOW() WHERE user_id = ? AND token != ?",
-                [$userId, $exceptToken]
-            );
-        } else {
-            return $db->query(
-                "UPDATE auth_tokens SET revoked_at = NOW() WHERE user_id = ?",
-                [$userId]
-            );
+            $conditions[] = ['token', '!=', $exceptToken];
         }
+
+        $tokens = AuthTokenModel::where($conditions);
+        $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+
+        foreach ($tokens as $token) {
+            $token->revoked_at = $now;
+            $token->save();
+        }
+
+        return true;
     }
 }
 
