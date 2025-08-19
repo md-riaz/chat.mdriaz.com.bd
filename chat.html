@@ -58,11 +58,12 @@
 <body>
     <div id="login">
         <h2>Login</h2>
-        <input type="text" id="username" placeholder="Enter your name" autofocus>
+        <input type="email" id="email" placeholder="Email" value="alice@example.com" autofocus>
+        <input type="password" id="password" placeholder="Password" value="password123">
         <button id="loginBtn">Login</button>
     </div>
     <div id="chat">
-        <h2>Chat with Fixed User</h2>
+        <h2>Chat Demo</h2>
         <div id="messages"></div>
         <input type="text" id="send" placeholder="Type a message">
         <button id="sendBtn">Send</button>
@@ -70,50 +71,88 @@
     <script>
         const loginDiv = document.getElementById('login');
         const chatDiv = document.getElementById('chat');
-        const usernameInput = document.getElementById('username');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
         const loginBtn = document.getElementById('loginBtn');
         const messagesDiv = document.getElementById('messages');
         const sendInput = document.getElementById('send');
         const sendBtn = document.getElementById('sendBtn');
 
+        const CONVERSATION_ID = 1;
+        let token = '';
+        let currentUser = null;
         let ws;
-        let username = '';
-        const fixedUser = 'demo_user'; // The user you always chat with
 
-        loginBtn.onclick = function () {
-            username = usernameInput.value.trim();
-            if (!username) return alert('Please enter your name');
+        loginBtn.onclick = async function () {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            if (!email || !password) return alert('Please enter email and password');
+
+            const res = await fetch('/api/user/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const result = await res.json();
+            if (!result.success) {
+                alert(result.message);
+                return;
+            }
+
+            token = result.data.token;
+            currentUser = result.data.user;
             loginDiv.style.display = 'none';
             chatDiv.style.display = 'block';
+
+            await loadMessages();
             connectWS();
         };
 
+        async function loadMessages() {
+            const res = await fetch(`/api/chat/messages?conversation_id=${CONVERSATION_ID}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const result = await res.json();
+            if (result.success && Array.isArray(result.data)) {
+                result.data.forEach(msg => {
+                    const sender = msg.sender_username || (msg.sender && msg.sender.username) || 'User';
+                    addMsg(sender === currentUser.username ? 'Me' : sender, msg.content, sender === currentUser.username ? 'me' : 'other');
+                });
+            }
+        }
+
         function connectWS() {
-            ws = new WebSocket('ws://localhost:8080/chat');
-            ws.onopen = function () {
-                addMsg('System', 'Connected to chat server');
-            };
+            ws = new WebSocket(`ws://localhost:8080/chat?token=${token}`);
             ws.onmessage = function (e) {
                 let data;
                 try { data = JSON.parse(e.data); } catch { return; }
-                if (data.type === 'chat') {
-                    addMsg(data.from === username ? 'Me' : data.from, data.message, data.from === username ? 'me' : 'other');
-                } else if (data.type === 'connection') {
-                    addMsg('System', data.message);
+                if (data.type === 'ping') {
+                    ws.send(JSON.stringify({ type: 'pong' }));
+                    return;
                 }
-            };
-            ws.onclose = function () {
-                addMsg('System', 'Disconnected');
+                if (data.type === 'message_created' && data.conversation_id === CONVERSATION_ID) {
+                    const m = data.payload;
+                    const sender = (m.sender && m.sender.username) || 'User';
+                    addMsg(sender === currentUser.username ? 'Me' : sender, m.content, sender === currentUser.username ? 'me' : 'other');
+                }
             };
         }
 
         sendBtn.onclick = sendMessage;
         sendInput.onkeydown = function (e) { if (e.key === 'Enter') sendMessage(); };
 
-        function sendMessage() {
+        async function sendMessage() {
             const msg = sendInput.value.trim();
-            if (!msg || !ws || ws.readyState !== 1) return;
-            ws.send(JSON.stringify({ type: 'chat', from: username, to: fixedUser, message: msg }));
+            if (!msg) return;
+            await fetch('/api/chat/send-message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ conversation_id: CONVERSATION_ID, content: msg })
+            });
             sendInput.value = '';
         }
 
