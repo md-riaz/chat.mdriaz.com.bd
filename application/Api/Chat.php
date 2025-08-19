@@ -108,6 +108,9 @@ class Chat extends ApiController
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 50), 100);
         $offset = (int)($_GET['offset'] ?? 0);
+        if ($limit <= 0) {
+            $limit = 50;
+        }
 
         if (!$conversationId) {
             $this->respondError(400, 'Conversation ID is required');
@@ -120,8 +123,10 @@ class Chat extends ApiController
 
         try {
             $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $offset);
+            $total = MessageModel::getConversationMessageCount($conversationId);
+            $page = (int) floor($offset / $limit) + 1;
 
-            $this->respondSuccess($messages, 'Messages retrieved successfully');
+            $this->respondPaginated($messages, $total, $page, $limit, 'Messages retrieved successfully');
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
                 'user_id' => $user['user_id'],

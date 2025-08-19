@@ -148,6 +148,21 @@ class MessageModel extends Model
     }
 
     /**
+     * Get total message count for a conversation
+     */
+    public static function getConversationMessageCount($conversationId)
+    {
+        $db = static::db();
+
+        $result = $db->query(
+            "SELECT COUNT(*) as count FROM messages WHERE conversation_id = ?",
+            [$conversationId]
+        )->fetchArray();
+
+        return $result['count'];
+    }
+
+    /**
      * Mark message as read by user
      */
     public static function markAsRead($messageId, $userId)

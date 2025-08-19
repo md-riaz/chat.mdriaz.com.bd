@@ -394,8 +394,35 @@ Get messages for conversation.
 **Query Parameters:**
 
 - `conversation_id` (int): Required
-- `limit` (int): Max messages
-- `offset` (int): Skip messages
+- `limit` (int): Max messages (default: 50, max: 100)
+- `offset` (int): Skip messages (used with limit to calculate page)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Messages retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "conversation_id": 10,
+        "sender_id": 2,
+        "content": "Hello"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 50,
+      "total": 123,
+      "total_pages": 3,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
 
 ### POST /api/chat/create-conversation
 
