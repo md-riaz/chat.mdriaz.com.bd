@@ -360,7 +360,7 @@ Get user's conversations.
 
 ### POST /api/chat/send-message
 
-Send a message.
+Send a message. Optionally include a `temp_id` to correlate the server response and WebSocket event with a client-side placeholder.
 
 **Request Body:**
 
@@ -369,7 +369,21 @@ Send a message.
   "conversation_id": 1,
   "content": "Hello!",
   "message_type": "text",
-  "mentions": [2]
+  "mentions": [2],
+  "temp_id": "123e4567"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message sent successfully",
+  "data": {
+    "message_id": 42,
+    "temp_id": "123e4567"
+  }
 }
 ```
 
