@@ -26,6 +26,9 @@ abstract class ApiController extends Controller
             http_response_code(200);
             exit;
         }
+
+        // Populate current user from auth token if available
+        $this->currentUser = CoreAuth::currentUser();
     }
 
     /**
@@ -41,16 +44,6 @@ abstract class ApiController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * Authenticate the current request
-     */
-    protected function authenticate($required = true)
-    {
-        $user = $required ? CoreAuth::requireAuth() : CoreAuth::currentUser();
-        $this->currentUser = $user;
-        return $user;
     }
 
     /**

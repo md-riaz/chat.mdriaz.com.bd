@@ -49,7 +49,7 @@ class Status extends ApiController
      */
     public function auth()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         $this->respondSuccess([
             'authenticated' => true,

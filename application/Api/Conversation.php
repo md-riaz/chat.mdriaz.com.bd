@@ -15,7 +15,7 @@ class Conversation extends ApiController
      */
     public function index()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $limit = min((int)($_GET['limit'] ?? 20), 100);
@@ -36,7 +36,7 @@ class Conversation extends ApiController
      */
     public function create()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['type']);
@@ -118,7 +118,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
@@ -147,7 +147,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         // Check if user is admin
@@ -196,7 +196,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         // Check if user is admin
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id'])) {
@@ -230,7 +230,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
@@ -255,7 +255,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['user_ids']);
@@ -301,7 +301,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
         $this->validateRequired($data, ['user_id']);
 
@@ -334,7 +334,7 @@ class Conversation extends ApiController
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($id, $user['user_id'])) {
