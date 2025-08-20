@@ -141,6 +141,19 @@ abstract class Model
         return $related::first([[$ownerKey, '=', $value]]);
     }
 
+    /**
+     * Define a many-to-many relationship.
+     *
+     * @param class-string<Model> $relatedClass   Related model class name.
+     * @param string              $pivotTable     Pivot table joining the models.
+     * @param string              $foreignPivotKey Foreign key for the current model on the pivot table.
+     * @param string              $relatedPivotKey Foreign key for the related model on the pivot table.
+     * @param string              $localKey       Local key on the current model.
+     * @param string              $relatedKey     Key name on the related model's table.
+     * @param bool                $withPivot      Include pivot data in `_pivot` relation.
+     *
+     * @return Collection<Model> Collection of related model instances.
+     */
     protected function belongsToMany(
         string $relatedClass,
         string $pivotTable,
@@ -157,27 +170,89 @@ abstract class Model
 
         $db = static::db();
 
-        $pivotRows = $db
-            ->query(
-                "SELECT * FROM {$pivotTable} WHERE {$foreignPivotKey} = ?",
-                [$localValue]
-            )
-            ->fetchAll();
-        if (!$pivotRows) {
+        $pivotRows = $this->fetchPivotRows($db, $pivotTable, $foreignPivotKey, $localValue);
+        if ($pivotRows === []) {
             return new Collection();
         }
 
+        $relatedRows = $this->fetchRelatedRows($db, $pivotRows, $relatedClass, $relatedKey, $relatedPivotKey);
+        $results = $this->hydratePivot($relatedRows, $pivotRows, $relatedKey, $relatedPivotKey, $relatedClass, $withPivot);
+
+        return new Collection($results);
+    }
+
+    /**
+     * Retrieve pivot rows for a many-to-many relationship.
+     *
+     * @param Database $db             Database instance.
+     * @param string   $pivotTable     Pivot table name.
+     * @param string   $foreignPivotKey Column referencing the current model.
+     * @param mixed    $localValue     Value of the current model's key.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function fetchPivotRows(Database $db, string $pivotTable, string $foreignPivotKey, mixed $localValue): array
+    {
+        return $db
+            ->query("SELECT * FROM {$pivotTable} WHERE {$foreignPivotKey} = ?", [$localValue])
+            ->fetchAll() ?: [];
+    }
+
+    /**
+     * Retrieve related model rows for a many-to-many relationship.
+     *
+     * @param Database              $db
+     * @param array<int,array<string,mixed>> $pivotRows
+     * @param class-string<Model>   $relatedClass
+     * @param string                $relatedKey     Column name on the related table.
+     * @param string                $relatedPivotKey Column on the pivot table referencing the related model.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function fetchRelatedRows(
+        Database $db,
+        array $pivotRows,
+        string $relatedClass,
+        string $relatedKey,
+        string $relatedPivotKey
+    ): array {
         $relatedIds = array_unique(array_column($pivotRows, $relatedPivotKey));
-        $placeholders = implode(', ', array_fill(0, count($relatedIds), '?'));
+        if ($relatedIds === []) {
+            return [];
+        }
+
         /** @var class-string<Model> $relatedClass */
         $relatedTable = $relatedClass::$table;
-        $relatedRows = $db
+        $placeholders = implode(', ', array_fill(0, count($relatedIds), '?'));
+
+        return $db
             ->query(
                 "SELECT * FROM {$relatedTable} WHERE {$relatedKey} IN ({$placeholders})",
                 $relatedIds
             )
             ->fetchAll() ?: [];
+    }
 
+    /**
+     * Hydrate related models and optionally attach pivot data.
+     *
+     * @param array<int,array<string,mixed>> $relatedRows
+     * @param array<int,array<string,mixed>> $pivotRows
+     * @param string                         $relatedKey     Key name on the related model.
+     * @param string                         $relatedPivotKey Key on the pivot table for the related model.
+     * @param class-string<Model>            $relatedClass   Related model class.
+     * @param bool                           $withPivot      Include pivot data in `_pivot` relation.
+     *
+     * @return array<int,Model>
+     */
+    private function hydratePivot(
+        array $relatedRows,
+        array $pivotRows,
+        string $relatedKey,
+        string $relatedPivotKey,
+        string $relatedClass,
+        bool $withPivot
+    ): array {
         $pivotMap = [];
         foreach ($pivotRows as $pivot) {
             $pivotMap[$pivot[$relatedPivotKey]] = $pivot;
@@ -194,7 +269,7 @@ abstract class Model
             $results[] = $model;
         }
 
-        return new Collection($results);
+        return $results;
     }
 
     public static function all(): array
