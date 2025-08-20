@@ -34,6 +34,11 @@ abstract class Model
         return DBManager::getDB();
     }
 
+    public static function query(): QueryBuilder
+    {
+        return new QueryBuilder(static::db(), static::$table, static::class);
+    }
+
     public function __get(string $name): mixed
     {
         if (array_key_exists($name, $this->attributes)) {
@@ -451,7 +456,7 @@ abstract class Model
      *
      * @return array{0:string,1:array} [whereSql, params]
      */
-    protected static function compileWhere(array $conditions): array
+    public static function compileWhere(array $conditions): array
     {
         if ($conditions === []) {
             return ['', []];

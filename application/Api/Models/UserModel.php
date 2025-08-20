@@ -167,15 +167,17 @@ class UserModel extends Model
      */
     public static function searchUsers($query, $limit = 10)
     {
-        $db = static::db();
+        $like = "%$query%";
 
-        return $db->query(
-            "SELECT id, name, username, email, avatar_url"
-            . " FROM users"
-            . " WHERE deleted_at IS NULL AND (name LIKE ? OR username LIKE ? OR email LIKE ?)"
-            . " LIMIT ?",
-            ["%$query%", "%$query%", "%$query%", $limit]
-        )->fetchAll();
+        return array_map(
+            fn($user) => $user->toArray(),
+            static::query()
+                ->select(['id', 'name', 'username', 'email', 'avatar_url'])
+                ->where([['deleted_at', 'IS', null]])
+                ->whereRaw('(name LIKE :q OR username LIKE :q OR email LIKE :q)', ['q' => $like])
+                ->limit($limit)
+                ->get()
+        );
     }
 
     /**
@@ -242,9 +244,9 @@ class UserModel extends Model
      */
     public static function getUserCount()
     {
-        $db = static::db();
-        $result = $db->query("SELECT COUNT(*) as count FROM users WHERE deleted_at IS NULL")->fetchArray();
-        return $result['count'];
+        return static::query()
+            ->where([['deleted_at', 'IS', null]])
+            ->count();
     }
 
     /**
@@ -299,15 +301,15 @@ class UserModel extends Model
      */
     public static function getRecentUsers($limit = 10)
     {
-        $db = static::db();
-        return $db->query(
-            "SELECT id, name, username, email, avatar_url, created_at"
-            . " FROM users"
-            . " WHERE deleted_at IS NULL"
-            . " ORDER BY created_at DESC"
-            . " LIMIT ?",
-            [$limit]
-        )->fetchAll();
+        return array_map(
+            fn($user) => $user->toArray(),
+            static::query()
+                ->select(['id', 'name', 'username', 'email', 'avatar_url', 'created_at'])
+                ->where([['deleted_at', 'IS', null]])
+                ->orderBy('created_at', 'DESC')
+                ->limit($limit)
+                ->get()
+        );
     }
 }
 
