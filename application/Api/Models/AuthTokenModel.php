@@ -4,6 +4,7 @@ namespace App\Api\Models;
 
 use Framework\Core\Model;
 use Framework\Core\Util;
+use App\Api\Models\UserModel;
 
 class AuthTokenModel extends Model
 {
@@ -12,6 +13,11 @@ class AuthTokenModel extends Model
         'user_id', 'token', 'ip_address', 'user_agent', 'device_id', 'created_at', 'expires_at', 'revoked_at'
     ];
     protected bool $timestamps = false;
+
+    public function user(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class);
+    }
 
     public static function createToken($userId, $ipAddress = null, $userAgent = null, $deviceId = null, $expiresAt = null)
     {
@@ -30,20 +36,27 @@ class AuthTokenModel extends Model
         return $token;
     }
 
-    public static function validateToken($token)
+    public static function validateToken($token): ?self
     {
         $db = static::db();
 
-        return $db->query(
-            "SELECT at.id as session_id, at.token, at.user_id, at.ip_address, at.user_agent,"
-            . " at.device_id, at.created_at, at.expires_at, u.name, u.email, u.username, u.avatar_url"
-            . " FROM auth_tokens at"
-            . " JOIN users u ON at.user_id = u.id"
-            . " WHERE at.token = ?"
-            . " AND at.revoked_at IS NULL"
-            . " AND (at.expires_at IS NULL OR at.expires_at > NOW())",
+        $row = $db->query(
+            "SELECT * FROM auth_tokens WHERE token = ? AND revoked_at IS NULL"
+            . " AND (expires_at IS NULL OR expires_at > NOW())",
             [$token]
         )->fetchArray();
+
+        if (!$row) {
+            return null;
+        }
+
+        $model = new static();
+        $model->attributes = $row;
+        $model->original = $row;
+        // Lazy load user relationship for convenience
+        $model->user;
+
+        return $model;
     }
 
     public static function revokeToken($token)

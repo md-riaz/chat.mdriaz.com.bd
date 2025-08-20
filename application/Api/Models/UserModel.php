@@ -4,11 +4,39 @@ namespace App\Api\Models;
 
 use Framework\Core\Model;
 use App\Api\Models\AuthTokenModel;
+use App\Api\Models\DeviceModel;
+use App\Api\Models\ConversationModel;
+use App\Api\Models\MessageModel;
 
 class UserModel extends Model
 {
     protected static string $table = 'users';
     protected array $fillable = ['name', 'email', 'username', 'password', 'avatar_url', 'created_at', 'updated_at', 'deleted_at'];
+
+    public function tokens(): array
+    {
+        return $this->hasMany(AuthTokenModel::class, 'user_id');
+    }
+
+    public function devices(): array
+    {
+        return $this->hasMany(DeviceModel::class, 'user_id');
+    }
+
+    public function conversations(): array
+    {
+        return $this->belongsToMany(
+            ConversationModel::class,
+            'conversation_participants',
+            'user_id',
+            'conversation_id'
+        );
+    }
+
+    public function messages(): array
+    {
+        return $this->hasMany(MessageModel::class, 'sender_id');
+    }
 
     /**
      * Run a paginated user listing using Database::dataQuery
@@ -81,19 +109,24 @@ class UserModel extends Model
      */
     public static function validateToken(string $token): ?array
     {
-        $tokenData = AuthTokenModel::validateToken($token);
-        if (!$tokenData) {
+        $tokenModel = AuthTokenModel::validateToken($token);
+        if (!$tokenModel) {
+            return null;
+        }
+
+        $user = $tokenModel->user;
+        if (!$user) {
             return null;
         }
 
         return [
-            'user_id'    => (int) $tokenData['user_id'],
-            'name'       => $tokenData['name'],
-            'email'      => $tokenData['email'],
-            'username'   => $tokenData['username'],
-            'avatar_url' => $tokenData['avatar_url'] ?? null,
-            'session_id' => (int) $tokenData['session_id'],
-            'token'      => $tokenData['token'],
+            'user_id'    => (int) $user->id,
+            'name'       => $user->name,
+            'email'      => $user->email,
+            'username'   => $user->username,
+            'avatar_url' => $user->avatar_url ?? null,
+            'session_id' => (int) $tokenModel->id,
+            'token'      => $tokenModel->token,
         ];
     }
 

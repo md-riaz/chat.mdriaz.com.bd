@@ -3,12 +3,24 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use App\Api\Models\ConversationModel;
+use App\Api\Models\UserModel;
 
 class ConversationParticipantModel extends Model
 {
     protected static string $table = 'conversation_participants';
     protected array $fillable = ['conversation_id', 'user_id', 'role', 'joined_at', 'last_read_message_id'];
     protected bool $timestamps = false;
+
+    public function conversation(): ?ConversationModel
+    {
+        return $this->belongsTo(ConversationModel::class);
+    }
+
+    public function user(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class);
+    }
 
     public static function isParticipant($conversationId, $userId)
     {
@@ -82,16 +94,20 @@ class ConversationParticipantModel extends Model
 
     public static function getParticipants($conversationId)
     {
-        $db = static::db();
+        $conversation = ConversationModel::find((int) $conversationId);
+        if (!$conversation) {
+            return [];
+        }
 
-        return $db->query(
-            "SELECT cp.*, u.name, u.username, u.email, u.avatar_url"
-            . " FROM conversation_participants cp"
-            . " JOIN users u ON cp.user_id = u.id"
-            . " WHERE cp.conversation_id = ?"
-            . " ORDER BY cp.joined_at ASC",
-            [$conversationId]
-        )->fetchAll();
+        $participants = $conversation->participants();
+        return array_map(function ($user) {
+            $data = $user->toArray();
+            $pivot = $user->_pivot ?? [];
+            $data['role'] = $pivot['role'] ?? null;
+            $data['joined_at'] = $pivot['joined_at'] ?? null;
+            $data['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
+            return $data;
+        }, $participants);
     }
 
     public static function getParticipantRole($conversationId, $userId)

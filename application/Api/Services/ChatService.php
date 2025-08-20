@@ -42,19 +42,17 @@ class ChatService
             return null;
         }
 
-        $tokenData = AuthTokenModel::validateToken($token);
+        $tokenModel = AuthTokenModel::validateToken($token);
 
-        if (!$tokenData) {
+        if (!$tokenModel) {
             return null;
         }
 
-        // Get user details
-        $user = UserModel::find($tokenData['user_id']);
-
+        $user = $tokenModel->user;
         if ($user) {
-            $user = $user->toArray();
-            $user['user_id'] = $user['id']; // For compatibility
-            return $user;
+            $data = $user->toArray();
+            $data['user_id'] = $user->id; // For compatibility
+            return $data;
         }
 
         return null;

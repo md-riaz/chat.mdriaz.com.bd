@@ -13,6 +13,16 @@ class MessageAttachmentModel extends Model
     ];
     protected bool $timestamps = false;
 
+    public function message(): ?MessageModel
+    {
+        return $this->belongsTo(MessageModel::class);
+    }
+
+    public function uploader(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class, 'uploader_id');
+    }
+
     /**
      * Add attachment to a message (alias for createAttachment)
      */
