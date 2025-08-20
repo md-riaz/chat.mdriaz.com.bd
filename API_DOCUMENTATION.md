@@ -787,6 +787,18 @@ Create new conversation.
 
 Create a new group conversation.
 
+### POST /api/chat/add-participants
+
+Add users to an existing group conversation.
+
+### POST /api/chat/remove-participant
+
+Remove a user from a group conversation.
+
+### POST /api/chat/rename-group
+
+Rename a group conversation.
+
 ### GET /api/chat/find-conversation
 
 Find existing direct conversation by username.
