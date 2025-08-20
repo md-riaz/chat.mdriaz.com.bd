@@ -36,6 +36,15 @@ class QueryBuilder
         return $this;
     }
 
+    /**
+     * Add a "IS NULL" condition for the given column.
+     */
+    public function whereNull(string $column): self
+    {
+        $this->conditions[] = [$column, 'IS', null];
+        return $this;
+    }
+
     public function whereRaw(string $sql, array $params = []): self
     {
         $this->rawConditions[] = ['sql' => $sql, 'params' => $params];
