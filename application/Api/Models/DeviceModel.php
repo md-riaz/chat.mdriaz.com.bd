@@ -3,6 +3,7 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use Framework\Core\Collection;
 use App\Api\Models\UserModel;
 
 class DeviceModel extends Model
@@ -66,7 +67,7 @@ class DeviceModel extends Model
     {
         $devices = static::where(['user_id' => $userId]);
         usort($devices, fn($a, $b) => strcmp($b->last_active_at, $a->last_active_at));
-        return array_map(fn($d) => $d->toArray(), $devices);
+        return (new Collection($devices))->toArray();
     }
 
     public static function removeDevice($userId, $deviceId)
