@@ -248,6 +248,25 @@ class ConversationModel extends Model
     }
 
     /**
+     * Find direct conversation between current user and a username
+     */
+    public static function getDirectConversationByUsername($currentUserId, $username)
+    {
+        $otherUser = UserModel::getUserByUsername($username);
+        if (!$otherUser) {
+            return null;
+        }
+
+        $conversation = static::getDirectConversation($currentUserId, $otherUser->id);
+
+        if (!$conversation) {
+            return null;
+        }
+
+        return static::getConversationDetails($conversation['id'], $currentUserId);
+    }
+
+    /**
      * Get unread message count for user in conversation
      */
     public static function getUnreadCount($conversationId, $userId)

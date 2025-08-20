@@ -146,6 +146,10 @@ Search users for adding to conversations.
 - `q` (string): Search query
 - `limit` (int): Max results (default: 10, max: 50)
 
+### GET /api/user/username/{username}
+
+Get user details by username.
+
 ### GET /api/user/me
 
 Get current user profile.
@@ -777,6 +781,14 @@ Get messages for conversation.
 ### POST /api/chat/create-conversation
 
 Create new conversation.
+
+### POST /api/chat/create-group
+
+Create a new group conversation.
+
+### GET /api/chat/find-conversation
+
+Find existing direct conversation by username.
 
 ### POST /api/chat/add-reaction
 
