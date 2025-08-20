@@ -38,21 +38,22 @@ class AuthTokenModel extends Model
 
     public static function validateToken($token): ?self
     {
-        $db = static::db();
+        $now = (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))
+            ->format('Y-m-d H:i:s');
 
-        $row = $db->query(
-            "SELECT * FROM auth_tokens WHERE token = ? AND revoked_at IS NULL"
-            . " AND (expires_at IS NULL OR expires_at > NOW())",
-            [$token]
-        )->fetchArray();
+        $model = static::first([
+            'token' => $token,
+            ['revoked_at', 'IS NULL'],
+            ['OR' => [
+                ['expires_at', 'IS NULL'],
+                ['expires_at', '>', $now],
+            ]],
+        ]);
 
-        if (!$row) {
+        if (!$model) {
             return null;
         }
 
-        $model = new static();
-        $model->attributes = $row;
-        $model->original = $row;
         // Lazy load user relationship for convenience
         $model->user;
 
