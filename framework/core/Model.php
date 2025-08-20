@@ -457,27 +457,55 @@ abstract class Model
             return ['', []];
         }
 
-        $parts = [];
         $params = [];
         $paramCounter = 0;
 
-        // Normalize associative ['col' => val] into triplets
-        $normalized = [];
+        $where = static::buildWhere($conditions, $params, $paramCounter, 'AND');
+
+        return ['WHERE ' . $where, $params];
+    }
+
+    private static function buildWhere(
+        array $conditions,
+        array &$params,
+        int &$paramCounter,
+        string $boolean = 'AND'
+    ): string {
+        $parts = [];
+
         foreach ($conditions as $key => $cond) {
+            // Handle grouped conditions like ['OR' => [...]]
+            if ($key === 'OR' || $key === 'AND') {
+                if (!is_array($cond)) {
+                    throw new InvalidArgumentException("The value for {$key} must be an array.");
+                }
+                $groupSql = static::buildWhere($cond, $params, $paramCounter, $key);
+                if ($groupSql !== '') {
+                    $parts[] = '(' . $groupSql . ')';
+                }
+                continue;
+            }
+
             if (is_string($key)) {
-                $normalized[] = [$key, '=', $cond];
-            } else {
-                // Expect [col, op, val]
-                if (!is_array($cond) || count($cond) !== 3) {
+                $col = $key;
+                $op = '=';
+                $val = $cond;
+            } elseif (is_array($cond)) {
+                $count = count($cond);
+                if ($count === 2) {
+                    [$col, $op] = $cond;
+                    $val = null;
+                } elseif ($count === 3) {
+                    [$col, $op, $val] = $cond;
+                } else {
                     throw new InvalidArgumentException(
                         'Each condition must be ["col", "op", value] or ["col" => value].'
                     );
                 }
-                $normalized[] = $cond;
+            } else {
+                throw new InvalidArgumentException('Invalid condition format.');
             }
-        }
 
-        foreach ($normalized as [$col, $op, $val]) {
             $op = strtoupper(trim((string) $op));
             switch ($op) {
                 case '=':
@@ -494,7 +522,6 @@ abstract class Model
                 }
                 case 'IN': {
                     if (!is_array($val) || $val === []) {
-                        // Empty IN lists are always false; return no rows safely
                         $parts[] = '1=0';
                         break;
                     }
@@ -504,8 +531,7 @@ abstract class Model
                         $phs[] = $paramName;
                         $params[ltrim($paramName, ':')] = $v;
                     }
-                    $inList = implode(', ', $phs);
-                    $parts[] = "{$col} IN ({$inList})";
+                    $parts[] = "{$col} IN (" . implode(', ', $phs) . ')';
                     break;
                 }
                 case 'IS': {
@@ -518,12 +544,16 @@ abstract class Model
                     $params[ltrim($paramName, ':')] = $val;
                     break;
                 }
+                case 'IS NULL':
+                case 'IS NOT NULL': {
+                    $parts[] = "{$col} {$op}";
+                    break;
+                }
                 default:
                     throw new InvalidArgumentException("Unsupported operator: {$op}");
             }
         }
 
-        $whereSql = 'WHERE ' . implode(' AND ', $parts);
-        return [$whereSql, $params];
+        return implode(" {$boolean} ", $parts);
     }
 }
