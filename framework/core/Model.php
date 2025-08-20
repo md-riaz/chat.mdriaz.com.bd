@@ -442,6 +442,127 @@ abstract class Model
     }
 
     /**
+     * Insert multiple rows at once.
+     */
+    public static function bulkInsert(array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $db = static::db();
+        $table = static::$table;
+        $pk = static::$primaryKey;
+
+        $model = new static();
+        $insertable = array_values(array_unique(array_merge($model->fillable, [$pk])));
+        $columns = array_intersect($insertable, array_keys($rows[0]));
+        if ($columns === []) {
+            throw new RuntimeException('No columns to insert.');
+        }
+
+        $rowPlaceholder = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $placeholders = [];
+        $values = [];
+        foreach ($rows as $row) {
+            $placeholders[] = $rowPlaceholder;
+            foreach ($columns as $col) {
+                $values[] = $row[$col] ?? null;
+            }
+        }
+
+        $sql = sprintf(
+            'INSERT INTO %s (%s) VALUES %s',
+            $table,
+            implode(', ', $columns),
+            implode(', ', $placeholders)
+        );
+
+        $db->query($sql, $values);
+    }
+
+    /**
+     * Delete multiple rows matching the given conditions.
+     *
+     * @return int number of affected rows
+     */
+    public static function bulkDelete(array $conditions): int
+    {
+        $db = static::db();
+        $table = static::$table;
+
+        [$whereSql, $params] = static::compileWhere($conditions);
+        if ($whereSql === '') {
+            throw new InvalidArgumentException('Bulk delete requires conditions.');
+        }
+
+        $sql = "DELETE FROM {$table} {$whereSql}";
+        return $db->query($sql, $params)->affectedRows();
+    }
+
+    /**
+     * Perform a select with optional joins, ordering, limits and conditions.
+     *
+     * @param array $conditions Where conditions
+     * @param array $joins      Each join: [table, first, operator, second, type]
+     * @param array $orderBy    Each order: [column, direction]
+     * @param int|null $limit   Limit
+     * @param int|null $offset  Offset
+     * @param array|string $columns Columns to select
+     * @return array
+     */
+    public static function filter(
+        array $conditions = [],
+        array $joins = [],
+        array $orderBy = [],
+        ?int $limit = null,
+        ?int $offset = null,
+        array|string $columns = '*'
+    ): array {
+        $db = static::db();
+        $table = static::$table;
+
+        $select = is_array($columns) ? implode(', ', $columns) : $columns;
+
+        $joinSql = '';
+        foreach ($joins as $join) {
+            $type = strtoupper($join['type'] ?? 'INNER');
+            $joinTable = $join['table'];
+            $first = $join['first'];
+            $op = $join['operator'] ?? '=';
+            $second = $join['second'];
+            $joinSql .= " {$type} JOIN {$joinTable} ON {$first} {$op} {$second}";
+        }
+
+        [$whereSql, $params] = static::compileWhere($conditions);
+
+        $orderSql = '';
+        if ($orderBy) {
+            $parts = [];
+            foreach ($orderBy as $order) {
+                if (is_array($order)) {
+                    [$col, $dir] = $order + [1 => 'ASC'];
+                    $parts[] = "{$col} " . strtoupper($dir);
+                } else {
+                    $parts[] = (string) $order;
+                }
+            }
+            $orderSql = ' ORDER BY ' . implode(', ', $parts);
+        }
+
+        $limitSql = '';
+        if ($limit !== null) {
+            $limitSql = ' LIMIT ' . (int) $limit;
+            if ($offset !== null) {
+                $limitSql .= ' OFFSET ' . (int) $offset;
+            }
+        }
+
+        $sql = "SELECT {$select} FROM {$table}{$joinSql} {$whereSql}{$orderSql}{$limitSql}";
+        return $db->query($sql, $params)->fetchAll() ?: [];
+    }
+
+    /**
      * Build a WHERE clause and parameters from a simple conditions array.
      *
      * Supported forms:
