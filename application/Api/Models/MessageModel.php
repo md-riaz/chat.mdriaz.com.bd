@@ -6,6 +6,7 @@ use Framework\Core\Model;
 use App\Api\Models\MessageReactionModel;
 use App\Api\Models\MessageEventModel;
 use App\Api\Models\MessageMentionModel;
+use Framework\Core\Collection;
 
 class MessageModel extends Model
 {
@@ -18,7 +19,7 @@ class MessageModel extends Model
         return $this->belongsTo(UserModel::class, 'sender_id');
     }
 
-    public function attachments(): array
+    public function attachments(): Collection
     {
         return $this->hasMany(MessageAttachmentModel::class, 'message_id');
     }

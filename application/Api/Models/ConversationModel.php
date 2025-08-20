@@ -3,6 +3,7 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use Framework\Core\Collection;
 use App\Api\Models\MessageModel;
 use App\Api\Models\UserModel;
 
@@ -12,12 +13,12 @@ class ConversationModel extends Model
     protected array $fillable = ['title', 'is_group', 'created_by', 'created_at'];
     protected bool $timestamps = false;
 
-    public function messages(): array
+    public function messages(): Collection
     {
         return $this->hasMany(MessageModel::class, 'conversation_id');
     }
 
-    public function participants(): array
+    public function participants(): Collection
     {
         return $this->belongsToMany(
             UserModel::class,
@@ -148,15 +149,17 @@ class ConversationModel extends Model
             return [];
         }
 
-        $participants = $conversation->participants();
-        return array_map(function ($user) {
-            $data = $user->toArray();
-            $pivot = $user->_pivot ?? [];
-            $data['role'] = $pivot['role'] ?? null;
-            $data['joined_at'] = $pivot['joined_at'] ?? null;
-            $data['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
-            return $data;
-        }, $participants);
+        $participants = $conversation->participants()->toArray();
+        $results = [];
+        foreach ($participants as $user) {
+            $pivot = $user['_pivot'] ?? [];
+            $user['role'] = $pivot['role'] ?? null;
+            $user['joined_at'] = $pivot['joined_at'] ?? null;
+            $user['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
+            unset($user['_pivot']);
+            $results[] = $user;
+        }
+        return $results;
     }
 
     /**
