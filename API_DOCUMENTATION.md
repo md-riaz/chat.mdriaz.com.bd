@@ -161,6 +161,37 @@ Get user's conversations with pagination.
 - `page` (int): Page number
 - `per_page` (int): Items per page
 
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversations retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "title": "Project Team",
+        "is_group": 1,
+        "participant_count": 3,
+        "last_message": "See you tomorrow",
+        "last_message_time": "2024-05-01T12:34:56Z",
+        "last_sender_name": "Alice",
+        "unread_count": 2
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 1,
+      "total_pages": 1,
+      "has_next": false,
+      "has_prev": false
+    }
+  }
+}
+```
+
 ### POST /api/conversation
 
 Create a new conversation.
@@ -180,14 +211,49 @@ Create a new conversation.
 {
   "type": "group",
   "name": "Project Team",
-  "description": "Discussion for the new project",
-  "participant_ids": [2, 3, 4]
+"description": "Discussion for the new project",
+"participant_ids": [2, 3, 4]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation created successfully",
+  "data": {
+    "id": 10,
+    "title": "Project Team",
+    "is_group": 1,
+    "user_role": "admin",
+    "participant_count": 4,
+    "last_read_message_id": null,
+    "created_by": 1
+  }
 }
 ```
 
 ### GET /api/conversation/{id}
 
 Get conversation details.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation retrieved successfully",
+  "data": {
+    "id": 1,
+    "title": "Project Team",
+    "is_group": 1,
+    "user_role": "member",
+    "participant_count": 3,
+    "last_read_message_id": 42
+  }
+}
+```
 
 ### PUT /api/conversation/{id}
 
@@ -198,7 +264,24 @@ Update conversation details (admin only).
 ```json
 {
   "name": "Updated Group Name",
-  "description": "Updated description"
+"description": "Updated description"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation updated successfully",
+  "data": {
+    "id": 1,
+    "title": "Updated Group Name",
+    "is_group": 1,
+    "user_role": "admin",
+    "participant_count": 3,
+    "last_read_message_id": 42
+  }
 }
 ```
 
@@ -206,9 +289,38 @@ Update conversation details (admin only).
 
 Delete conversation (admin only).
 
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation deleted successfully"
+}
+```
+
 ### GET /api/conversation/{id}/participants
 
 Get conversation participants.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Participants retrieved successfully",
+  "data": [
+    {
+      "user_id": 1,
+      "name": "Alice",
+      "username": "alice",
+      "email": "alice@example.com",
+      "avatar_url": "/uploads/avatars/alice.jpg",
+      "role": "admin",
+      "joined_at": "2024-05-01T08:00:00Z"
+    }
+  ]
+}
+```
 
 ### POST /api/conversation/{id}/add-participants
 
@@ -218,7 +330,20 @@ Add participants to conversation (admin only).
 
 ```json
 {
-  "user_ids": [5, 6, 7]
+"user_ids": [5, 6, 7]
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Participants added successfully",
+  "data": {
+    "added_users": [5, 6, 7],
+    "total_added": 3
+  }
 }
 ```
 
@@ -230,13 +355,31 @@ Remove participant from conversation.
 
 ```json
 {
-  "user_id": 5
+"user_id": 5
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Participant removed successfully"
 }
 ```
 
 ### POST /api/conversation/{id}/mark-read
 
 Mark conversation as read.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Conversation marked as read"
+}
+```
 
 ---
 
@@ -252,6 +395,40 @@ Get messages for a conversation.
 - `page` (int): Page number
 - `per_page` (int): Items per page (max: 100)
 - `search` (string): Search within messages
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Messages retrieved successfully",
+  "data": {
+    "items": [
+      {
+        "id": 10,
+        "conversation_id": 1,
+        "sender_id": 2,
+        "sender_name": "Bob",
+        "sender_avatar": "/uploads/avatars/bob.jpg",
+        "content": "Hello everyone!",
+        "message_type": "text",
+        "parent_id": null,
+        "created_at": "2024-05-01T12:00:00Z",
+        "reaction_count": 3,
+        "reactions": "👍,❤️"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 50,
+      "total_pages": 3,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
 
 ### POST /api/message
 
@@ -283,10 +460,61 @@ Each attachment object may include:
 - `file_type` (string): Required MIME type
 - `file_size` (int, optional): Size in bytes
 - `original_name` (string, optional): Original filename
+ 
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message sent successfully",
+  "data": {
+    "id": 101,
+    "conversation_id": 1,
+    "sender_id": 2,
+    "content": "Hello everyone!",
+    "message_type": "text",
+    "parent_id": null,
+    "created_at": "2024-05-01T12:00:00Z",
+    "sender": {
+      "id": 2,
+      "name": "Bob",
+      "avatar_url": "/uploads/avatars/bob.jpg"
+    },
+    "attachments": [],
+    "reaction_count": 0
+  }
+}
+```
 
 ### GET /api/message/{id}
 
 Get specific message details.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message retrieved successfully",
+  "data": {
+    "id": 101,
+    "conversation_id": 1,
+    "sender_id": 2,
+    "content": "Hello everyone!",
+    "message_type": "text",
+    "parent_id": null,
+    "created_at": "2024-05-01T12:00:00Z",
+    "sender": {
+      "id": 2,
+      "name": "Bob",
+      "avatar_url": "/uploads/avatars/bob.jpg"
+    },
+    "attachments": [],
+    "reaction_count": 1,
+    "reactions": "👍"
+  }
+}
+```
 
 ### PUT /api/message/{id}
 
@@ -296,13 +524,47 @@ Edit a message (sender only).
 
 ```json
 {
-  "content": "Updated message content"
+"content": "Updated message content"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message updated successfully",
+  "data": {
+    "id": 101,
+    "conversation_id": 1,
+    "sender_id": 2,
+    "content": "Updated message content",
+    "message_type": "text",
+    "parent_id": null,
+    "created_at": "2024-05-01T12:00:00Z",
+    "sender": {
+      "id": 2,
+      "name": "Bob",
+      "avatar_url": "/uploads/avatars/bob.jpg"
+    },
+    "attachments": [],
+    "reaction_count": 1
+  }
 }
 ```
 
 ### DELETE /api/message/{id}
 
 Delete a message (sender only).
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message deleted successfully"
+}
+```
 
 ### POST /api/message/{id}/reaction
 
@@ -312,13 +574,36 @@ Add/remove reaction to a message.
 
 ```json
 {
-  "emoji": "👍"
+"emoji": "👍"
+}
+```
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Reaction added successfully",
+  "data": {
+    "action": "added",
+    "message_id": 101,
+    "emoji": "👍"
+  }
 }
 ```
 
 ### POST /api/message/{id}/mark-read
 
 Mark message as read.
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Message marked as read"
+}
+```
 
 ### POST /api/message/upload
 
@@ -332,11 +617,15 @@ Upload file for message attachment.
 
 ```json
 {
-  "attachment_id": 1,
-  "file_url": "/uploads/messages/file.pdf",
-  "file_type": "application/pdf",
-  "file_size": 102400,
-  "original_name": "document.pdf"
+  "success": true,
+  "message": "File uploaded successfully",
+  "data": {
+    "attachment_id": 1,
+    "file_url": "/uploads/messages/file.pdf",
+    "file_type": "application/pdf",
+    "file_size": 102400,
+    "original_name": "document.pdf"
+  }
 }
 ```
 
@@ -349,6 +638,37 @@ Search messages across all conversations.
 - `q` (string): Search query
 - `page` (int): Page number
 - `per_page` (int): Items per page
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Messages found successfully",
+  "data": {
+    "items": [
+      {
+        "id": 10,
+        "conversation_id": 1,
+        "conversation_title": "Project Team",
+        "sender_name": "Bob",
+        "sender_avatar": "/uploads/avatars/bob.jpg",
+        "content": "Hello",
+        "created_at": "2024-05-01T12:00:00Z",
+        "reaction_count": 1
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "per_page": 20,
+      "total": 30,
+      "total_pages": 2,
+      "has_next": true,
+      "has_prev": false
+    }
+  }
+}
+```
 
 ---
 
