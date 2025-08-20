@@ -20,15 +20,14 @@ class ConversationModel extends Model
 
     public function participants(): Collection
     {
-        return $this->belongsToMany(
-            UserModel::class,
-            'conversation_participants',
-            'conversation_id',
-            'user_id',
-            'id',
-            'id',
-            true
-        );
+        // Join table: conversation_participants (conversation_id ↔ user_id)
+        // Pivot fields: role, joined_at, last_read_message_id
+        return $this->belongsToMany(UserModel::class, [
+            'pivotTable'      => 'conversation_participants',
+            'foreignPivotKey' => 'conversation_id',
+            'relatedPivotKey' => 'user_id',
+            'withPivot'       => true,
+        ]);
     }
 
     public function creator(): ?UserModel

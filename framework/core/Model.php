@@ -161,41 +161,64 @@ abstract class Model
     }
 
     /**
-     * Define a many-to-many relationship.
+     * Define a many-to-many relationship using a named-parameter options array.
      *
-     * @param class-string<Model> $relatedClass   Related model class name.
-     * @param string              $pivotTable     Pivot table joining the models.
-     * @param string              $foreignPivotKey Foreign key for the current model on the pivot table.
-     * @param string              $relatedPivotKey Foreign key for the related model on the pivot table.
-     * @param string              $localKey       Local key on the current model.
-     * @param string              $relatedKey     Key name on the related model's table.
-     * @param bool                $withPivot      Include pivot data in `_pivot` relation.
+     * Required options: `pivotTable`, `foreignPivotKey`, `relatedPivotKey`.
+     * Optional options: `localKey` (defaults to model primary key),
+     * `relatedKey` (defaults to related model primary key) and `withPivot`.
+     *
+     * @param class-string<Model>        $relatedClass Related model class name.
+     * @param array<string,mixed>        $options     Relationship options.
      *
      * @return Collection<Model> Collection of related model instances.
      */
-    protected function belongsToMany(
-        string $relatedClass,
-        string $pivotTable,
-        string $foreignPivotKey,
-        string $relatedPivotKey,
-        string $localKey = 'id',
-        string $relatedKey = 'id',
-        bool $withPivot = false
-    ): Collection {
-        $localValue = $this->attributes[$localKey] ?? null;
+    protected function belongsToMany(string $relatedClass, array $options): Collection
+    {
+        $defaults = [
+            'pivotTable'     => null,
+            'foreignPivotKey'=> null,
+            'relatedPivotKey'=> null,
+            'localKey'       => static::$primaryKey,
+            'relatedKey'     => $relatedClass::getPrimaryKey(),
+            'withPivot'      => false,
+        ];
+
+        $options = array_merge($defaults, $options);
+
+        foreach (['pivotTable', 'foreignPivotKey', 'relatedPivotKey'] as $required) {
+            if (empty($options[$required])) {
+                throw new InvalidArgumentException("Missing required belongsToMany option '{$required}'.");
+            }
+        }
+
+        $localValue = $this->attributes[$options['localKey']] ?? null;
         if ($localValue === null) {
             return new Collection();
         }
 
         $db = static::db();
 
-        $pivotRows = $this->fetchPivotRows($db, $pivotTable, $foreignPivotKey, $localValue);
+        $pivotRows = $this->fetchPivotRows($db, $options['pivotTable'], $options['foreignPivotKey'], $localValue);
         if ($pivotRows === []) {
             return new Collection();
         }
 
-        $relatedRows = $this->fetchRelatedRows($db, $pivotRows, $relatedClass, $relatedKey, $relatedPivotKey);
-        $results = $this->hydratePivot($relatedRows, $pivotRows, $relatedKey, $relatedPivotKey, $relatedClass, $withPivot);
+        $relatedRows = $this->fetchRelatedRows(
+            $db,
+            $pivotRows,
+            $relatedClass,
+            $options['relatedKey'],
+            $options['relatedPivotKey']
+        );
+
+        $results = $this->hydratePivot(
+            $relatedRows,
+            $pivotRows,
+            $options['relatedKey'],
+            $options['relatedPivotKey'],
+            $relatedClass,
+            $options['withPivot']
+        );
 
         return new Collection($results);
     }
