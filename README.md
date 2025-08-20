@@ -15,6 +15,8 @@ A complete real-time chat system built with PHP, designed for modern messaging a
 - Message search across conversations
 - Read receipts and message status tracking
 - Typing indicators
+- Direct conversation lookup by username
+- Dedicated group creation endpoint
 
 ✅ **User Management**
 

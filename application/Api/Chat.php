@@ -198,6 +198,100 @@ class Chat extends ApiController
     }
 
     /**
+     * POST /api/chat/create-group - Create a new group conversation
+     */
+    public function createGroup()
+    {
+        $user = $this->authenticate();
+        $data = $this->getJsonInput();
+
+        $this->validateRequired($data, ['name', 'participant_ids']);
+
+        if (!is_array($data['participant_ids']) || count($data['participant_ids']) < 1) {
+            $this->respondError(400, 'At least 1 participant is required for group conversations');
+        }
+
+        if (in_array($user['user_id'], $data['participant_ids'])) {
+            $this->respondError(400, 'You are automatically added to the conversation');
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            $conversationId = ConversationModel::createConversation(
+                $data['name'],
+                true,
+                $user['user_id']
+            );
+
+            // Add creator as admin
+            ConversationParticipantModel::addParticipant($conversationId, $user['user_id'], true);
+
+            foreach ($data['participant_ids'] as $participantId) {
+                ConversationParticipantModel::addParticipant($conversationId, $participantId, false);
+            }
+
+            $this->db->commit();
+
+            // Publish conversation event to WebSocket subscribers using user channels
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = RedisService::getInstance();
+                if ($redis->isConnected()) {
+                    $conversation = ConversationModel::getConversationById($conversationId);
+                    $participants = ConversationModel::getConversationParticipants($conversationId);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $conversationId,
+                            'type' => 'conversation_created',
+                            'payload' => $conversation
+                        ]));
+                    }
+                }
+            }
+
+            $this->respondSuccess([
+                'conversation_id' => $conversationId
+            ], 'Group conversation created successfully', 201);
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/create-group'
+            ]);
+            $this->respondError(500, 'Failed to create group conversation');
+        }
+    }
+
+    /**
+     * GET /api/chat/find-conversation - Find direct conversation by username
+     */
+    public function findConversation()
+    {
+        $user = $this->authenticate();
+        $username = $_GET['username'] ?? '';
+
+        if (empty($username)) {
+            $this->respondError(400, 'Username is required');
+        }
+
+        try {
+            $conversation = ConversationModel::getDirectConversationByUsername($user['user_id'], $username);
+
+            if (!$conversation) {
+                $this->respondError(404, 'Conversation not found');
+            }
+
+            $this->respondSuccess($conversation, 'Conversation retrieved successfully');
+        } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/find-conversation'
+            ]);
+            $this->respondError(500, 'Failed to find conversation');
+        }
+    }
+
+    /**
      * POST /api/chat/add-reaction - Add reaction to message
      */
     public function addReaction()

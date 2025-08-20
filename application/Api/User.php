@@ -65,6 +65,26 @@ class User extends ApiController
     }
 
     /**
+     * GET /api/user/username/{username} - Get user by username
+     */
+    public function username($username = null)
+    {
+        if (!$username) {
+            $this->respondError(400, 'Username is required');
+        }
+
+        $this->authenticate();
+
+        $user = UserModel::getUserByUsername($username);
+
+        if (!$user) {
+            $this->respondError(404, 'User not found');
+        }
+
+        $this->respondSuccess($user->toArray(), 'User retrieved successfully');
+    }
+
+    /**
      * PUT /api/user/{id} - Update a user
      */
     public function update($id = null)
