@@ -228,32 +228,106 @@ class MessageModel extends Model
     /**
      * Get messages for a conversation with details
      */
-    public static function getConversationMessagesWithDetails($conversationId, $limit = 50, $offset = 0)
+    public static function getConversationMessagesWithDetails($conversationId, $limit = 50, $lastId = null, $lastTimestamp = null, $search = null)
     {
+        $db = static::db();
+
         $reactionsQuery = DB_TYPE === 'pgsql'
             ? "(SELECT STRING_AGG(DISTINCT emoji, ',') FROM message_reactions WHERE message_id = messages.id)"
             : "(SELECT GROUP_CONCAT(DISTINCT emoji) FROM message_reactions WHERE message_id = messages.id)";
 
-        $joins = [
-            ['table' => 'users u', 'first' => 'messages.sender_id', 'second' => 'u.id'],
-        ];
+        $where = "messages.conversation_id = ?";
+        $params = [$conversationId];
 
-        $conditions = [
-            ['messages.conversation_id', '=', $conversationId],
-        ];
+        if ($search !== null && $search !== '') {
+            $where .= " AND messages.content LIKE ?";
+            $params[] = "%{$search}%";
+        }
 
-        $order = [['messages.created_at', 'ASC']];
+        if ($lastTimestamp !== null) {
+            $where .= " AND (messages.created_at < ? OR (messages.created_at = ? AND messages.id < ?))";
+            $params[] = $lastTimestamp;
+            $params[] = $lastTimestamp;
+            $params[] = $lastId ?? 0;
+        } elseif ($lastId !== null) {
+            $where .= " AND messages.id < ?";
+            $params[] = $lastId;
+        }
 
-        $columns = [
-            'messages.*',
-            'u.name as sender_name',
-            'u.username as sender_username',
-            'u.avatar_url as sender_avatar',
-            '(SELECT COUNT(*) FROM message_reactions WHERE message_id = messages.id) as reaction_count',
-            "$reactionsQuery as reactions",
-        ];
+        $sql = "SELECT messages.*, u.name as sender_name, u.username as sender_username, u.avatar_url as sender_avatar,
+                       (SELECT COUNT(*) FROM message_reactions WHERE message_id = messages.id) as reaction_count,
+                       $reactionsQuery as reactions
+                FROM messages
+                JOIN users u ON messages.sender_id = u.id
+                WHERE $where
+                ORDER BY messages.created_at DESC, messages.id DESC
+                LIMIT ?";
 
-        return static::filter($conditions, $joins, $order, $limit, $offset, $columns);
+        $params[] = $limit;
+
+        return $db->query($sql, $params)->fetchAll();
+    }
+
+    public static function searchUserMessagesCursor($userId, $searchQuery, $limit, $lastId = null, $lastTimestamp = null)
+    {
+        $db = static::db();
+
+        $where = "cp.user_id = ? AND m.content LIKE ?";
+        $params = [$userId, "%{$searchQuery}%"];
+
+        if ($lastTimestamp !== null) {
+            $where .= " AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))";
+            $params[] = $lastTimestamp;
+            $params[] = $lastTimestamp;
+            $params[] = $lastId ?? 0;
+        } elseif ($lastId !== null) {
+            $where .= " AND m.id < ?";
+            $params[] = $lastId;
+        }
+
+        $sql = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                JOIN conversations c ON m.conversation_id = c.id
+                JOIN conversation_participants cp ON c.id = cp.conversation_id
+                WHERE $where
+                ORDER BY m.created_at DESC, m.id DESC
+                LIMIT ?";
+
+        $params[] = $limit;
+
+        return $db->query($sql, $params)->fetchAll();
+    }
+
+    public static function searchConversationMessagesCursor($userId, $conversationId, $searchQuery, $limit, $lastId = null, $lastTimestamp = null)
+    {
+        $db = static::db();
+
+        $where = "cp.user_id = ? AND m.conversation_id = ? AND m.content LIKE ?";
+        $params = [$userId, $conversationId, "%{$searchQuery}%"];
+
+        if ($lastTimestamp !== null) {
+            $where .= " AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))";
+            $params[] = $lastTimestamp;
+            $params[] = $lastTimestamp;
+            $params[] = $lastId ?? 0;
+        } elseif ($lastId !== null) {
+            $where .= " AND m.id < ?";
+            $params[] = $lastId;
+        }
+
+        $sql = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                JOIN conversations c ON m.conversation_id = c.id
+                JOIN conversation_participants cp ON c.id = cp.conversation_id
+                WHERE $where
+                ORDER BY m.created_at DESC, m.id DESC
+                LIMIT ?";
+
+        $params[] = $limit;
+
+        return $db->query($sql, $params)->fetchAll();
     }
 }
 

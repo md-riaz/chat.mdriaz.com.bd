@@ -18,18 +18,13 @@ class Conversation extends ApiController
         $user = $this->authenticate();
 
         try {
-            $page = (int)($_GET['page'] ?? 1);
-            $perPage = min((int)($_GET['per_page'] ?? 20), 100);
+            $limit = min((int)($_GET['limit'] ?? 20), 100);
+            $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+            $lastTimestamp = $_GET['last_timestamp'] ?? null;
 
-            $result = ConversationModel::getUserConversationsPaginated($user['user_id'], $page, $perPage);
+            $items = ConversationModel::getUserConversationsPaginated($user['user_id'], $limit, $lastId, $lastTimestamp);
 
-            $this->respondPaginated(
-                $result['items'],
-                $result['total'],
-                $page,
-                $perPage,
-                'Conversations retrieved successfully'
-            );
+            $this->respondCursor($items, $limit, 'Conversations retrieved successfully');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to retrieve conversations');
         }

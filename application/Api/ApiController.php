@@ -173,4 +173,29 @@ abstract class ApiController extends Controller
             ]
         ], $message);
     }
+
+    /**
+     * Send cursor-based paginated response
+     */
+    protected function respondCursor($data, $limit, $message = 'Success')
+    {
+        $hasMore = count($data) === $limit;
+        $next = null;
+
+        if ($hasMore && !empty($data)) {
+            $last = end($data);
+            $next = [
+                'last_id' => $last['id'] ?? null,
+                'last_timestamp' => $last['created_at'] ?? ($last['last_message_time'] ?? null)
+            ];
+        }
+
+        $this->respondSuccess([
+            'items' => $data,
+            'pagination' => [
+                'has_more' => $hasMore,
+                'next' => $next
+            ]
+        ], $message);
+    }
 }

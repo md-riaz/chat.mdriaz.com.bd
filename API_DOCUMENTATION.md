@@ -156,12 +156,13 @@ Get current user profile.
 
 ### GET /api/conversation
 
-Get user's conversations with pagination.
+Get user's conversations with cursor-based pagination.
 
 **Query Parameters:**
 
-- `page` (int): Page number
-- `per_page` (int): Items per page
+- `limit` (int): Items to return (max: 100, default: 20)
+- `last_id` (int): Last conversation ID received (optional)
+- `last_timestamp` (string): Timestamp of last item for tie-breaking (optional)
 
 **Response:**
 
@@ -183,12 +184,8 @@ Get user's conversations with pagination.
       }
     ],
     "pagination": {
-      "current_page": 1,
-      "per_page": 20,
-      "total": 1,
-      "total_pages": 1,
-      "has_next": false,
-      "has_prev": false
+      "has_more": false,
+      "next": null
     }
   }
 }
@@ -394,8 +391,9 @@ Get messages for a conversation.
 **Query Parameters:**
 
 - `conversation_id` (int): Required
-- `page` (int): Page number
-- `per_page` (int): Items per page (max: 100)
+- `limit` (int): Items to return (max: 100, default: 50)
+- `last_id` (int): Last message ID received (optional)
+- `last_timestamp` (string): Timestamp of last item for tie-breaking (optional)
 - `search` (string): Search within messages
 
 **Response:**
@@ -421,12 +419,11 @@ Get messages for a conversation.
       }
     ],
     "pagination": {
-      "current_page": 1,
-      "per_page": 20,
-      "total": 50,
-      "total_pages": 3,
-      "has_next": true,
-      "has_prev": false
+      "has_more": true,
+      "next": {
+        "last_id": 5,
+        "last_timestamp": "2024-05-01T11:59:00Z"
+      }
     }
   }
 }
@@ -638,8 +635,9 @@ Search messages across all conversations.
 **Query Parameters:**
 
 - `q` (string): Search query
-- `page` (int): Page number
-- `per_page` (int): Items per page
+- `limit` (int): Items to return (max: 100, default: 20)
+- `last_id` (int): Last message ID received (optional)
+- `last_timestamp` (string): Timestamp of last item for tie-breaking (optional)
 
 **Response:**
 
@@ -661,12 +659,11 @@ Search messages across all conversations.
       }
     ],
     "pagination": {
-      "current_page": 1,
-      "per_page": 20,
-      "total": 30,
-      "total_pages": 2,
-      "has_next": true,
-      "has_prev": false
+      "has_more": true,
+      "next": {
+        "last_id": 10,
+        "last_timestamp": "2024-05-01T11:59:00Z"
+      }
     }
   }
 }
@@ -682,8 +679,9 @@ Get user's conversations with pagination.
 
 **Query Parameters:**
 
-- `page` (int): Page number
-- `per_page` (int): Items per page
+- `limit` (int): Items to return (max: 100, default: 20)
+- `last_id` (int): Last conversation ID received (optional)
+- `last_timestamp` (string): Timestamp of last item for tie-breaking (optional)
 
 **Response:**
 
@@ -700,12 +698,11 @@ Get user's conversations with pagination.
       }
     ],
     "pagination": {
-      "current_page": 1,
-      "per_page": 20,
-      "total": 40,
-      "total_pages": 2,
-      "has_next": true,
-      "has_prev": false
+      "has_more": true,
+      "next": {
+        "last_id": 1,
+        "last_timestamp": "2024-05-01T12:34:56Z"
+      }
     }
   }
 }
@@ -748,7 +745,8 @@ Get messages for conversation.
 
 - `conversation_id` (int): Required
 - `limit` (int): Max messages (default: 50, max: 100)
-- `offset` (int): Skip messages (used with limit to calculate page)
+- `last_id` (int): Last message ID received (optional)
+- `last_timestamp` (string): Timestamp of last item for tie-breaking (optional)
 
 **Response:**
 
@@ -766,12 +764,11 @@ Get messages for conversation.
       }
     ],
     "pagination": {
-      "current_page": 1,
-      "per_page": 50,
-      "total": 123,
-      "total_pages": 3,
-      "has_next": true,
-      "has_prev": false
+      "has_more": true,
+      "next": {
+        "last_id": 1,
+        "last_timestamp": "2024-05-01T00:00:00Z"
+      }
     }
   }
 }

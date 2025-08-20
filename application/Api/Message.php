@@ -18,6 +18,9 @@ class Message extends ApiController
         $user = $this->authenticate();
         $conversationId = $_GET['conversation_id'] ?? null;
         $search = $_GET['search'] ?? '';
+        $limit = min((int)($_GET['limit'] ?? 50), 100);
+        $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+        $lastTimestamp = $_GET['last_timestamp'] ?? null;
 
         if (!$conversationId) {
             $this->respondError(400, 'Conversation ID is required');
@@ -29,33 +32,9 @@ class Message extends ApiController
         }
 
         try {
-            if (!empty($search)) {
-                // Search messages in conversation
-                $query = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar
-                         FROM messages m
-                         JOIN users u ON m.sender_id = u.id
-                         WHERE m.conversation_id = ? AND m.content LIKE ?
-                         ORDER BY m.created_at DESC";
-                $params = [$conversationId, "%{$search}%"];
-            } else {
-                // Get regular conversation messages
-                $query = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar
-                         FROM messages m
-                         JOIN users u ON m.sender_id = u.id
-                         WHERE m.conversation_id = ?
-                         ORDER BY m.created_at DESC";
-                $params = [$conversationId];
-            }
+            $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $lastId, $lastTimestamp, $search);
 
-            $result = MessageModel::getMessagesPaginated($query, $params);
-
-            $this->respondPaginated(
-                $result['items'],
-                $result['item_count'],
-                $result['page_number'],
-                $result['item_limit'],
-                'Messages retrieved successfully'
-            );
+            $this->respondCursor($messages, $limit, 'Messages retrieved successfully');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to retrieve messages');
         }
@@ -401,30 +380,18 @@ class Message extends ApiController
     {
         $user = $this->authenticate();
         $query = $_GET['q'] ?? '';
+        $limit = min((int)($_GET['limit'] ?? 50), 100);
+        $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+        $lastTimestamp = $_GET['last_timestamp'] ?? null;
 
         if (empty($query)) {
             $this->respondError(400, 'Search query is required');
         }
 
         try {
-            // Use dataQuery for automatic pagination
-            $searchQuery = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title
-                           FROM messages m
-                           JOIN users u ON m.sender_id = u.id
-                           JOIN conversations c ON m.conversation_id = c.id
-                           JOIN conversation_participants cp ON c.id = cp.conversation_id
-                           WHERE cp.user_id = ? AND m.content LIKE ?
-                           ORDER BY m.created_at DESC";
+            $messages = MessageModel::searchUserMessagesCursor($user['user_id'], $query, $limit, $lastId, $lastTimestamp);
 
-            $result = MessageModel::getMessagesPaginated($searchQuery, [$user['user_id'], "%{$query}%"]);
-
-            $this->respondPaginated(
-                $result['items'],
-                $result['item_count'],
-                $result['page_number'],
-                $result['item_limit'],
-                'Messages found successfully'
-            );
+            $this->respondCursor($messages, $limit, 'Messages found successfully');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to search messages');
         }
