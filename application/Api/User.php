@@ -343,12 +343,14 @@ class User extends ApiController
     public function register()
     {
         $data = $this->getJsonInput();
-        $this->validateRequired($data, ['name', 'email', 'username', 'password']);
+        $this->validateRequired($data, ['name', 'email', 'username', 'password', 'phone']);
+
+        // Sanitize inputs
+        $data['email'] = $this->sanitizeEmail($data['email']);
+        $data['phone'] = $this->sanitizePhone($data['phone']);
 
         // Validation
-        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            $this->respondError(400, 'Invalid email format');
-        }
+        // email already sanitized above
 
         if (strlen($data['password']) < 8) {
             $this->respondError(400, 'Password must be at least 8 characters');
@@ -378,7 +380,8 @@ class User extends ApiController
                 $data['name'],
                 $data['email'],
                 $data['username'],
-                $data['password']
+                $data['password'],
+                $data['phone']
             );
 
             $this->db->commit();

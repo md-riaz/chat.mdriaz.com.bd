@@ -74,7 +74,8 @@ Register a new user.
   "name": "John Doe",
   "email": "user@example.com",
   "username": "johndoe",
-  "password": "password123"
+  "password": "password123",
+  "phone": "+15551234567"
 }
 ```
 

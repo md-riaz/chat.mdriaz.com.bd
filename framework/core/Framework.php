@@ -53,6 +53,10 @@ class Framework
         //Require config file
         require ROOT . 'configuration/config.php';
 
+        // Load Composer autoloader if present
+        if (file_exists(ROOT . 'vendor/autoload.php')) {
+            require ROOT . 'vendor/autoload.php';
+        }
 
         if (APP_MODE === "Debug") {
 

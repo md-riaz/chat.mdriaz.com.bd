@@ -12,7 +12,7 @@ use App\Api\Models\MessageModel;
 class UserModel extends Model
 {
     protected static string $table = 'users';
-    protected array $fillable = ['name', 'email', 'username', 'password', 'avatar_url', 'created_at', 'updated_at', 'deleted_at'];
+    protected array $fillable = ['name', 'email', 'username', 'password', 'phone', 'avatar_url', 'created_at', 'updated_at', 'deleted_at'];
 
     public function tokens(): Collection
     {
@@ -91,7 +91,7 @@ class UserModel extends Model
     /**
      * Create a new user
      */
-    public static function createUser($name, $email, $username, $password, $avatarUrl = null)
+    public static function createUser($name, $email, $username, $password, $phone, $avatarUrl = null)
     {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
@@ -100,6 +100,7 @@ class UserModel extends Model
             'email'     => $email,
             'username'  => $username,
             'password'  => $hashedPassword,
+            'phone'     => $phone,
             'avatar_url'=> $avatarUrl,
         ]);
         $user->save();
