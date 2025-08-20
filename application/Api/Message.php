@@ -17,45 +17,27 @@ class Message extends ApiController
     {
         $user = $this->authenticate();
         $conversationId = $_GET['conversation_id'] ?? null;
-        $search = $_GET['search'] ?? '';
+        $limit = min((int)($_GET['limit'] ?? 50), 100);
+        $offset = (int)($_GET['offset'] ?? 0);
+        if ($limit <= 0) {
+            $limit = 50;
+        }
 
         if (!$conversationId) {
             $this->respondError(400, 'Conversation ID is required');
         }
 
-        // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($conversationId, $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            $this->respondError(403, 'User is not a participant of this conversation');
+            return;
         }
 
         try {
-            if (!empty($search)) {
-                // Search messages in conversation
-                $query = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar
-                         FROM messages m
-                         JOIN users u ON m.sender_id = u.id
-                         WHERE m.conversation_id = ? AND m.content LIKE ?
-                         ORDER BY m.created_at DESC";
-                $params = [$conversationId, "%{$search}%"];
-            } else {
-                // Get regular conversation messages
-                $query = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar
-                         FROM messages m
-                         JOIN users u ON m.sender_id = u.id
-                         WHERE m.conversation_id = ?
-                         ORDER BY m.created_at DESC";
-                $params = [$conversationId];
-            }
+            $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $offset);
+            $total = MessageModel::getConversationMessageCount($conversationId);
+            $page = (int) floor($offset / $limit) + 1;
 
-            $result = MessageModel::getMessagesPaginated($query, $params);
-
-            $this->respondPaginated(
-                $result['items'],
-                $result['item_count'],
-                $result['page_number'],
-                $result['item_limit'],
-                'Messages retrieved successfully'
-            );
+            $this->respondPaginated($messages, $total, $page, $limit, 'Messages retrieved successfully');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to retrieve messages');
         }
@@ -69,17 +51,18 @@ class Message extends ApiController
         $user = $this->authenticate();
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['conversation_id', 'content']);
+        $this->validate($data, [
+            'conversation_id' => 'required',
+            'content' => 'required'
+        ]);
+        $tempId = $data['temp_id'] ?? null;
 
-        // Check if user is participant
         if (!ConversationParticipantModel::isParticipant($data['conversation_id'], $user['user_id'])) {
-            $this->respondError(403, 'You are not a participant in this conversation');
+            $this->respondError(403, 'User is not a participant of this conversation');
+            return;
         }
 
         try {
-            $this->db->beginTransaction();
-
-            // Create message
             $messageId = MessageModel::createMessage(
                 $data['conversation_id'],
                 $user['user_id'],
@@ -95,29 +78,30 @@ class Message extends ApiController
                 }
             }
 
-            // Handle file attachments if provided
-            if (!empty($data['attachments']) && is_array($data['attachments'])) {
-                foreach ($data['attachments'] as $attachment) {
-                    if (isset($attachment['file_url']) && isset($attachment['file_type'])) {
-                        MessageAttachmentModel::addAttachment(
-                            $messageId,
-                            $attachment['file_url'],
-                            $attachment['file_type'],
-                            $attachment['file_size'] ?? null,
-                            $attachment['original_name'] ?? null
-                        );
+            // Publish message event to WebSocket subscribers using user channels
+            $message = MessageModel::getMessageWithDetails($messageId);
+            if ($tempId !== null) {
+                $message['temp_id'] = $tempId;
+            }
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = \App\Api\Services\RedisService::getInstance();
+                if ($redis->isConnected()) {
+                    $participants = ConversationModel::getConversationParticipants($data['conversation_id']);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $data['conversation_id'],
+                            'type' => 'message_created',
+                            'payload' => $message
+                        ]));
                     }
                 }
             }
 
-            $this->db->commit();
-
-            // Get the created message with details
-            $message = MessageModel::getMessageWithDetails($messageId);
-
-            $this->respondSuccess($message, 'Message sent successfully', 201);
+            $this->respondSuccess([
+                'message_id' => $messageId,
+                'temp_id' => $tempId
+            ], 'Message sent successfully', 201);
         } catch (\Exception $e) {
-            $this->db->rollBack();
             $this->respondError(500, 'Failed to send message');
         }
     }
@@ -163,7 +147,7 @@ class Message extends ApiController
         $user = $this->authenticate();
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['content']);
+        $this->validate($data, ['content' => 'required']);
 
         try {
             // Check if message exists and user is the sender
@@ -238,40 +222,24 @@ class Message extends ApiController
      */
     public function reaction($id = null)
     {
-        if (!$id) {
-            $this->respondError(400, 'Message ID is required');
-        }
-
         $user = $this->authenticate();
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['emoji']);
+        $this->validate($data, [
+            'message_id' => 'required',
+            'emoji' => 'required'
+        ]);
 
         try {
-            // Check if message exists and user has access
-            $message = $this->db->query(
-                "SELECT conversation_id FROM messages WHERE id = ?",
-                [$id]
-            )->fetchArray();
+            $result = MessageModel::toggleReaction($data['message_id'], $user['user_id'], $data['emoji']);
 
-            if (!$message) {
-                $this->respondError(404, 'Message not found');
+            if ($result) {
+                $this->respondSuccess(null, 'Reaction added successfully');
+            } else {
+                $this->respondSuccess(null, 'Reaction removed successfully');
             }
-
-            if (!ConversationParticipantModel::isParticipant($message['conversation_id'], $user['user_id'])) {
-                $this->respondError(403, 'You do not have access to this message');
-            }
-
-            $result = MessageModel::toggleReaction($id, $user['user_id'], $data['emoji']);
-
-            $action = $result ? 'added' : 'removed';
-            $this->respondSuccess([
-                'action' => $action,
-                'message_id' => $id,
-                'emoji' => $data['emoji']
-            ], "Reaction {$action} successfully");
         } catch (\Exception $e) {
-            $this->respondError(500, 'Failed to process reaction');
+            $this->respondError(500, 'Failed to add reaction');
         }
     }
 
@@ -280,28 +248,13 @@ class Message extends ApiController
      */
     public function markAsRead($id = null)
     {
-        if (!$id) {
-            $this->respondError(400, 'Message ID is required');
-        }
-
         $user = $this->authenticate();
+        $data = $this->getJsonInput();
+
+        $this->validate($data, ['message_id' => 'required']);
 
         try {
-            // Check if message exists and user has access
-            $message = $this->db->query(
-                "SELECT conversation_id FROM messages WHERE id = ?",
-                [$id]
-            )->fetchArray();
-
-            if (!$message) {
-                $this->respondError(404, 'Message not found');
-            }
-
-            if (!ConversationParticipantModel::isParticipant($message['conversation_id'], $user['user_id'])) {
-                $this->respondError(403, 'You do not have access to this message');
-            }
-
-            MessageModel::markAsRead($id, $user['user_id']);
+            MessageModel::markAsRead($data['message_id'], $user['user_id']);
 
             $this->respondSuccess(null, 'Message marked as read');
         } catch (\Exception $e) {
@@ -401,30 +354,24 @@ class Message extends ApiController
     {
         $user = $this->authenticate();
         $query = $_GET['q'] ?? '';
+        $conversationId = $_GET['conversation_id'] ?? null;
+        $limit = min((int)($_GET['limit'] ?? 20), 100);
+        $offset = (int)($_GET['offset'] ?? 0);
 
         if (empty($query)) {
             $this->respondError(400, 'Search query is required');
         }
 
         try {
-            // Use dataQuery for automatic pagination
-            $searchQuery = "SELECT m.*, u.name as sender_name, u.avatar_url as sender_avatar, c.title as conversation_title
-                           FROM messages m
-                           JOIN users u ON m.sender_id = u.id
-                           JOIN conversations c ON m.conversation_id = c.id
-                           JOIN conversation_participants cp ON c.id = cp.conversation_id
-                           WHERE cp.user_id = ? AND m.content LIKE ?
-                           ORDER BY m.created_at DESC";
+            if ($conversationId) {
+                // Search within specific conversation - use Message model method
+                $messages = MessageModel::searchConversationMessages($user['user_id'], $conversationId, $query, $limit, $offset);
+            } else {
+                // Search across all user's conversations
+                $messages = MessageModel::searchUserMessages($user['user_id'], $query, $limit, $offset);
+            }
 
-            $result = MessageModel::getMessagesPaginated($searchQuery, [$user['user_id'], "%{$query}%"]);
-
-            $this->respondPaginated(
-                $result['items'],
-                $result['item_count'],
-                $result['page_number'],
-                $result['item_limit'],
-                'Messages found successfully'
-            );
+            $this->respondSuccess($messages, 'Messages found successfully');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to search messages');
         }

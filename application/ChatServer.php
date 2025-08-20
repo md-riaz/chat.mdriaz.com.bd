@@ -2,6 +2,7 @@
 
 namespace App;
 
+use App\Api\Services\ChatService;
 use Ratchet\ConnectionInterface;
 use Ratchet\MessageComponentInterface;
 use App\Api\Models\UserModel;
@@ -21,12 +22,10 @@ class ChatServer implements MessageComponentInterface
      */
     private array $userSockets = [];
 
-    private $redisFactory = null;
+    private $chatService;
 
     /** @var \Clue\React\Redis\Client|null */
     private $redisSubscriber = null;
-
-    private string $redisUri = '';
 
     /**
      * Interval in seconds between heartbeat pings
@@ -38,37 +37,13 @@ class ChatServer implements MessageComponentInterface
      */
     private int $heartbeatTimeout = 60;
 
-    /**
-     * Number of reconnect attempts for Redis subscription
-     */
-    private int $reconnectAttempts = 0;
 
-    /**
-     * Maximum delay between reconnection attempts in seconds
-     */
-    private int $maxReconnectDelay = 30;
-
-    public function __construct()
+    public function __construct(ChatService $chatService)
     {
         $this->clients = new \SplObjectStorage();
+        $this->chatService = $chatService;
+        $this->connectRedis();
 
-        if (class_exists('\\Clue\\React\\Redis\\Factory')) {
-            $loop = Loop::get();
-            $this->redisFactory = new \Clue\React\Redis\Factory($loop);
-
-            $uri = 'redis://';
-            if (defined('REDIS_PASSWORD') && REDIS_PASSWORD !== '') {
-                $uri .= ':' . urlencode(REDIS_PASSWORD) . '@';
-            }
-            $uri .= REDIS_HOST . ':' . REDIS_PORT;
-            if (defined('REDIS_DATABASE') && REDIS_DATABASE > 0) {
-                $uri .= '/' . REDIS_DATABASE;
-            }
-
-            $this->redisUri = $uri;
-
-            $this->connectRedis();
-        }
 
         Loop::addPeriodicTimer($this->heartbeatInterval, function () {
             $now = time();
@@ -86,32 +61,11 @@ class ChatServer implements MessageComponentInterface
 
     private function connectRedis(): void
     {
-        if ($this->redisFactory === null) {
-            return;
-        }
-
-        $this->redisFactory->createClient($this->redisUri)->then(function ($client) {
-            $this->reconnectAttempts = 0;
-            $this->redisSubscriber = $client;
-
-            $client->on('close', function () {
-                $this->handleSubscriptionIssue('Redis connection closed');
-            });
-
-            $client->on('error', function ($e) {
-                $this->handleSubscriptionIssue('Redis error: ' . $e->getMessage());
-            });
-
-            $client->psubscribe('user:*')->otherwise(function ($e) {
-                $this->handleSubscriptionIssue('Redis subscription failed: ' . $e->getMessage());
-            });
-
-            $client->on('pmessage', function ($pattern, $channel, $payload) {
-                $userId = (int)substr($channel, strpos($channel, ':') + 1);
-                $this->broadcastToUser($userId, $payload);
-            });
-        })->otherwise(function ($e) {
-            $this->handleSubscriptionIssue('Redis connection failed: ' . $e->getMessage());
+        $this->redisSubscriber = $this->chatService->getRedis()->getRedisInstance();
+        $this->redisSubscriber->psubscribe('user:*');
+        $this->redisSubscriber->on('pmessage', function ($pattern, $channel, $payload) {
+            $userId = (int)substr($channel, strpos($channel, ':') + 1);
+            $this->broadcastToUser($userId, $payload);
         });
     }
 
@@ -164,7 +118,7 @@ class ChatServer implements MessageComponentInterface
         parse_str($queryString, $params);
 
         $token = $params['token'] ?? null;
-        $user = $token ? UserModel::validateToken($token) : null;
+        $user = $this->chatService->authenticateUser($token);
 
         if (!$user) {
             $conn->send(json_encode(['type' => 'authorization_error', 'message' => 'Invalid or expired token']));
@@ -172,7 +126,7 @@ class ChatServer implements MessageComponentInterface
             return;
         }
 
-        $userId = (int)$user['id'];
+        $userId = (int)$user['user_id'];
         $this->clients->attach($conn, [
             'userId' => $userId,
             'lastPong' => time(),
@@ -183,17 +137,83 @@ class ChatServer implements MessageComponentInterface
         }
         $this->userSockets[$userId][$conn->resourceId] = $conn;
 
-        echo "Connection opened: #{$conn->resourceId} user {$user['id']}\n";
+        echo "Connection opened: #{$conn->resourceId} user {$userId}\n";
     }
 
     public function onMessage(ConnectionInterface $from, $msg): void
     {
         $data = json_decode($msg, true);
-        if (isset($data['type']) && $data['type'] === 'pong' && $this->clients->contains($from)) {
-            $info = $this->clients[$from];
-            $info['lastPong'] = time();
-            $this->clients[$from] = $info;
+        if (!$this->clients->contains($from)) {
+            return;
         }
+
+        $info = $this->clients[$from];
+        $userId = $info['userId'];
+
+        if (isset($data['type'])) {
+            switch ($data['type']) {
+                case 'pong':
+                    $info['lastPong'] = time();
+                    $this->clients[$from] = $info;
+                    break;
+                case 'message':
+                    $this->handleMessage($userId, $data['payload']);
+                    break;
+                case 'typing':
+                    $this->handleTyping($userId, $data['payload']);
+                    break;
+            }
+        }
+    }
+
+    private function handleMessage($userId, $payload)
+    {
+        try {
+            $this->chatService->validateMessage($payload);
+            $message = $this->chatService->sendMessage(
+                $userId,
+                $payload['conversation_id'],
+                $payload['content'],
+                $payload['message_type'] ?? 'text',
+                $payload['parent_id'] ?? null
+            );
+            $this->broadcastToConversation($payload['conversation_id'], 'message', $message);
+        } catch (\Exception $e) {
+            $this->sendToUser($userId, 'error', ['message' => $e->getMessage()]);
+        }
+    }
+
+    private function handleTyping($userId, $payload)
+    {
+        try {
+            $this->chatService->setTypingStatus(
+                $userId,
+                $payload['conversation_id'],
+                $payload['is_typing']
+            );
+            $this->broadcastToConversation($payload['conversation_id'], 'typing', [
+                'user_id' => $userId,
+                'is_typing' => $payload['is_typing']
+            ]);
+        } catch (\Exception $e) {
+            $this->sendToUser($userId, 'error', ['message' => $e->getMessage()]);
+        }
+    }
+
+    private function broadcastToConversation($conversationId, $type, $payload)
+    {
+        $participants = $this->chatService->getConversationParticipants($conversationId);
+        foreach ($participants as $participant) {
+            $this->sendToUser($participant['id'], $type, $payload);
+        }
+    }
+
+    private function sendToUser($userId, $type, $payload)
+    {
+        $this->broadcastToUser($userId, json_encode([
+            'type' => $type,
+            'payload' => $payload
+        ]));
     }
 
     public function onClose(ConnectionInterface $conn): void

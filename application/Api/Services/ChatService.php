@@ -13,24 +13,16 @@ class ChatService
 {
     protected $db;
     protected $redis;
-    protected static $instance = null;
 
-    public function __construct()
+    public function __construct(DBManager $db, RedisService $redis)
     {
-        $this->db = DBManager::getDB();
-
-        // Initialize Redis if available
-        if (class_exists('RedisService')) {
-            $this->redis = \RedisService::getInstance();
-        }
+        $this->db = $db;
+        $this->redis = $redis;
     }
 
-    public static function getInstance()
+    public function getRedis()
     {
-        if (self::$instance === null) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+        return $this->redis;
     }
 
     /**
@@ -84,10 +76,7 @@ class ChatService
             $message = MessageModel::getMessageWithDetails($messageId);
 
             // Update conversation last message timestamp
-            $this->db->query(
-                "UPDATE conversations SET updated_at = NOW() WHERE id = ?",
-                [$conversationId]
-            );
+            ConversationModel::updateTimestamp($conversationId);
 
             $this->db->commit();
 
@@ -103,15 +92,7 @@ class ChatService
      */
     public function getConversationParticipants($conversationId)
     {
-        $participants = $this->db->query(
-            "SELECT u.id, u.name, u.username, u.avatar_url, cp.role
-             FROM conversation_participants cp
-             JOIN users u ON cp.user_id = u.id
-             WHERE cp.conversation_id = ?",
-            [$conversationId]
-        )->fetchAll();
-
-        return $participants;
+        return ConversationParticipantModel::getParticipants($conversationId);
     }
 
     /**
@@ -144,11 +125,7 @@ class ChatService
      */
     public function markMessageAsRead($messageId, $userId)
     {
-        // Get message conversation
-        $message = $this->db->query(
-            "SELECT conversation_id FROM messages WHERE id = ?",
-            [$messageId]
-        )->fetchArray();
+        $message = MessageModel::get($messageId);
 
         if (!$message) {
             throw new \Exception('Message not found');
@@ -173,11 +150,7 @@ class ChatService
      */
     public function addReaction($messageId, $userId, $emoji)
     {
-        // Get message conversation
-        $message = $this->db->query(
-            "SELECT conversation_id FROM messages WHERE id = ?",
-            [$messageId]
-        )->fetchArray();
+        $message = MessageModel::get($messageId);
 
         if (!$message) {
             throw new \Exception('Message not found');
@@ -192,13 +165,7 @@ class ChatService
         $result = MessageModel::toggleReaction($messageId, $userId, $emoji);
 
         // Get updated reactions for broadcasting
-        $reactions = $this->db->query(
-            "SELECT r.emoji, r.user_id, u.name, u.username
-             FROM message_reactions r
-             JOIN users u ON r.user_id = u.id
-             WHERE r.message_id = ?",
-            [$messageId]
-        )->fetchAll();
+        $reactions = MessageModel::getReactions($messageId);
 
         return [
             'message_id' => $messageId,
@@ -271,20 +238,11 @@ class ChatService
             throw new \Exception('User is not a participant in this conversation');
         }
 
-        $conversation = $this->db->query(
-            "SELECT id, title, is_group, created_by, created_at
-             FROM conversations
-             WHERE id = ?",
-            [$conversationId]
-        )->fetchArray();
+        $conversation = ConversationModel::getConversationDetails($conversationId, $userId);
 
         if (!$conversation) {
             throw new \Exception('Conversation not found');
         }
-
-        // Get participants
-        $participants = $this->getConversationParticipants($conversationId);
-        $conversation['participants'] = $participants;
 
         return $conversation;
     }
@@ -357,17 +315,7 @@ class ChatService
      */
     public function getUnreadCount($userId)
     {
-        $result = $this->db->query(
-            "SELECT COUNT(*) as unread_count
-             FROM messages m
-             JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
-             WHERE cp.user_id = ? 
-               AND m.sender_id != ? 
-               AND (cp.last_read_message_id IS NULL OR m.id > cp.last_read_message_id)",
-            [$userId, $userId]
-        )->fetchArray();
-
-        return (int)$result['unread_count'];
+        return ConversationModel::getTotalUnreadCount($userId);
     }
 
     /**
@@ -430,15 +378,15 @@ class ChatService
 
         if ($this->redis && $this->redis->isConnected()) {
             $pattern = "typing:{$conversationId}:*";
-            // Note: This is a simplified approach. In production, you'd want to use SCAN
-            $keys = $this->redis->getRedisInstance()->keys($pattern);
-
-            foreach ($keys as $key) {
-                $data = $this->redis->get($key);
-                if ($data) {
-                    $typingData = json_decode($data, true);
-                    if ($typingData && $typingData['is_typing']) {
-                        $typingUsers[] = $typingData;
+            $iterator = null;
+            while ($keys = $this->redis->getRedisInstance()->scan($iterator, $pattern, 100)) {
+                foreach ($keys as $key) {
+                    $data = $this->redis->get($key);
+                    if ($data) {
+                        $typingData = json_decode($data, true);
+                        if ($typingData && $typingData['is_typing']) {
+                            $typingUsers[] = $typingData;
+                        }
                     }
                 }
             }
@@ -453,7 +401,7 @@ class ChatService
     public function getOnlineUsers()
     {
         if ($this->redis && $this->redis->isConnected()) {
-            return $this->redis->smembers('online_users');
+            return $this->redis->sMembers('online_users');
         }
 
         return [];
@@ -522,24 +470,10 @@ class ChatService
         }
 
         // Calculate from database
-        $result = $this->db->query(
-            "SELECT COUNT(*) as total_messages, MAX(created_at) as last_activity
-             FROM messages 
-             WHERE conversation_id = ?",
-            [$conversationId]
-        )->fetchArray();
+        $stats['total_messages'] = MessageModel::getConversationMessageCount($conversationId);
+        $stats['last_activity'] = MessageModel::getLastActivity($conversationId);
+        $stats['active_participants'] = ConversationParticipantModel::getParticipantCount($conversationId);
 
-        $stats['total_messages'] = (int)$result['total_messages'];
-        $stats['last_activity'] = $result['last_activity'];
-
-        $participantResult = $this->db->query(
-            "SELECT COUNT(*) as active_participants
-             FROM conversation_participants 
-             WHERE conversation_id = ?",
-            [$conversationId]
-        )->fetchArray();
-
-        $stats['active_participants'] = (int)$participantResult['active_participants'];
 
         // Cache for 5 minutes
         if ($this->redis && $this->redis->isConnected()) {

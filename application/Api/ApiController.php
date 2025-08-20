@@ -10,20 +10,35 @@ abstract class ApiController extends Controller
 {
     public $db;
     protected $currentUser;
+    protected $errors = [];
 
     public function __construct()
     {
         $this->db = DBManager::getDB();
+        $this->setup();
+    }
 
-        // Set JSON response headers
+    protected function setup()
+    {
         header('Content-Type: application/json');
+        $this->handleCORS();
+    }
 
-        // Handle CORS
+    protected function handleCORS()
+    {
+        $allowed_origins = ALLOWED_ORIGINS;
+        if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
+            header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
+        } else {
+            header("Access-Control-Allow-Origin: " . $allowed_origins[0]);
+        }
+
+        header('Access-Control-Allow-Credentials: true');
+        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            header('Access-Control-Allow-Origin: *');
-            header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-            header('Access-Control-Allow-Headers: Content-Type, Authorization');
-            http_response_code(200);
+            http_response_code(204);
             exit;
         }
     }
@@ -33,8 +48,7 @@ abstract class ApiController extends Controller
      */
     protected function getAuthToken()
     {
-        $headers = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
 
         if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             return $matches[1];
@@ -49,6 +63,9 @@ abstract class ApiController extends Controller
     protected function authenticate($required = true)
     {
         $user = $required ? CoreAuth::requireAuth() : CoreAuth::currentUser();
+        if ($required && !$user) {
+            $this->respondError(401, 'Unauthorized');
+        }
         $this->currentUser = $user;
         return $user;
     }
@@ -69,34 +86,44 @@ abstract class ApiController extends Controller
     }
 
     /**
-     * Validate required fields in input data
+     * Validate input data against a set of rules
      */
-    protected function validateRequired($data, $requiredFields)
+    protected function validate($data, $rules)
     {
-        foreach ($requiredFields as $field) {
-            if (!isset($data[$field]) || $data[$field] === '' || $data[$field] === null) {
-                $this->respondError(400, "Field '{$field}' is required");
+        foreach ($rules as $field => $rule) {
+            $validations = explode('|', $rule);
+            foreach ($validations as $validation) {
+                $params = explode(':', $validation);
+                $method = 'validate' . ucfirst($params[0]);
+                if (method_exists($this, $method)) {
+                    $this->$method($data, $field, $params[1] ?? null);
+                }
             }
         }
-    }
 
-    /**
-     * Validate email format
-     */
-    protected function validateEmail($email)
-    {
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $this->respondError(400, 'Invalid email format');
+        if (!empty($this->errors)) {
+            $this->respondError(400, 'Validation failed', $this->errors);
         }
     }
 
-    /**
-     * Validate array input
-     */
+    protected function validateRequired($data, $field)
+    {
+        if (!isset($data[$field]) || $data[$field] === '' || $data[$field] === null) {
+            $this->errors[$field][] = "Field '{$field}' is required";
+        }
+    }
+
+    protected function validateEmail($data, $field)
+    {
+        if (isset($data[$field]) && !filter_var($data[$field], FILTER_VALIDATE_EMAIL)) {
+            $this->errors[$field][] = 'Invalid email format';
+        }
+    }
+
     protected function validateArray($data, $field, $minLength = 1)
     {
         if (!isset($data[$field]) || !is_array($data[$field]) || count($data[$field]) < $minLength) {
-            $this->respondError(400, "Field '{$field}' must be an array with at least {$minLength} items");
+            $this->errors[$field][] = "Field '{$field}' must be an array with at least {$minLength} items";
         }
     }
 
@@ -107,11 +134,21 @@ abstract class ApiController extends Controller
     {
         $sanitized = trim(strip_tags($input));
 
-        if ($maxLength && strlen($sanitized) > $maxLength) {
-            $sanitized = substr($sanitized, 0, $maxLength);
+        if ($maxLength && mb_strlen($sanitized) > $maxLength) {
+            $sanitized = mb_substr($sanitized, 0, $maxLength);
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Send a JSON response
+     */
+    protected function respond($data, $statusCode = 200)
+    {
+        http_response_code($statusCode);
+        echo json_encode($data);
+        exit;
     }
 
     /**
@@ -119,8 +156,6 @@ abstract class ApiController extends Controller
      */
     protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
     {
-        http_response_code($statusCode);
-
         $response = [
             'success' => true,
             'message' => $message
@@ -130,8 +165,7 @@ abstract class ApiController extends Controller
             $response['data'] = $data;
         }
 
-        echo json_encode($response);
-        exit;
+        $this->respond($response, $statusCode);
     }
 
     /**
@@ -139,8 +173,6 @@ abstract class ApiController extends Controller
      */
     protected function respondError($statusCode, $message, $errors = null)
     {
-        http_response_code($statusCode);
-
         $response = [
             'success' => false,
             'message' => $message
@@ -150,8 +182,7 @@ abstract class ApiController extends Controller
             $response['errors'] = $errors;
         }
 
-        echo json_encode($response);
-        exit;
+        $this->respond($response, $statusCode);
     }
 
     /**

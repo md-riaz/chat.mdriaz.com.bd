@@ -44,7 +44,7 @@ class Conversation extends ApiController
         $user = $this->authenticate();
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['type']);
+        $this->validate($data, ['type' => 'required']);
 
         // Validate conversation type
         if (!in_array($data['type'], ['direct', 'group'])) {
@@ -53,7 +53,7 @@ class Conversation extends ApiController
 
         // For direct conversations, validate participant
         if ($data['type'] === 'direct') {
-            $this->validateRequired($data, ['participant_id']);
+            $this->validate($data, ['participant_id' => 'required']);
 
             if ($data['participant_id'] == $user['user_id']) {
                 $this->respondError(400, 'Cannot create conversation with yourself');
@@ -69,7 +69,10 @@ class Conversation extends ApiController
 
         // For group conversations, validate name and participants
         if ($data['type'] === 'group') {
-            $this->validateRequired($data, ['name', 'participant_ids']);
+            $this->validate($data, [
+                'name' => 'required',
+                'participant_ids' => 'required|array:1'
+            ]);
 
             if (!is_array($data['participant_ids']) || count($data['participant_ids']) < 1) {
                 $this->respondError(400, 'At least 1 participant is required for group conversations');
@@ -263,7 +266,7 @@ class Conversation extends ApiController
         $user = $this->authenticate();
         $data = $this->getJsonInput();
 
-        $this->validateRequired($data, ['user_ids']);
+        $this->validate($data, ['user_ids' => 'required|array:1']);
 
         // Check if user is admin
         if (!ConversationParticipantModel::isAdmin($id, $user['user_id'])) {
@@ -308,7 +311,7 @@ class Conversation extends ApiController
 
         $user = $this->authenticate();
         $data = $this->getJsonInput();
-        $this->validateRequired($data, ['user_id']);
+        $this->validate($data, ['user_id' => 'required']);
 
         $userId = $data['user_id'];
 
@@ -360,6 +363,24 @@ class Conversation extends ApiController
             $this->respondSuccess(null, 'Conversation marked as read');
         } catch (\Exception $e) {
             $this->respondError(500, 'Failed to mark conversation as read');
+        }
+    }
+
+    /**
+     * GET /api/conversation/unread-count - Get unread message count for all conversations
+     */
+    public function unreadCount()
+    {
+        $user = $this->authenticate();
+
+        try {
+            $totalUnread = ConversationModel::getTotalUnreadCount($user['user_id']);
+
+            $this->respondSuccess([
+                'unread_count' => $totalUnread
+            ], 'Unread count retrieved successfully');
+        } catch (\Exception $e) {
+            $this->respondError(500, 'Failed to get unread count');
         }
     }
 }

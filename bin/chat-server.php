@@ -15,8 +15,16 @@ echo "Starting WebSocket Chat Server on {$host}:{$port}\n";
 
 $app = new App($host, $port, '0.0.0.0');
 
+use App\Api\Services\ChatService;
+use App\Api\Services\RedisService;
+use Framework\Core\DBManager;
+
+$db = DBManager::getDB();
+$redis = RedisService::getInstance();
+$chatService = new ChatService($db, $redis);
+
 // Route WebSocket connections to our chat server
-$app->route('/chat', new ChatServer, ['*']);
+$app->route('/chat', new ChatServer($chatService), ['*']);
 
 // Start the server
 $app->run();
