@@ -115,6 +115,40 @@ abstract class ApiController extends Controller
     }
 
     /**
+     * Sanitize and validate email address
+     */
+    protected function sanitizeEmail($email)
+    {
+        $email = filter_var(trim(strtolower($email)), FILTER_SANITIZE_EMAIL);
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->respondError(400, 'Invalid email format');
+        }
+
+        return $email;
+    }
+
+    /**
+     * Sanitize and format phone number to E.164 using libphonenumber
+     */
+    protected function sanitizePhone($phone, $region = 'BD')
+    {
+        $phone = preg_replace('/\s+/', '', $phone);
+
+        $util = \libphonenumber\PhoneNumberUtil::getInstance();
+
+        try {
+            $numberProto = $util->parse($phone, $region);
+            if (!$util->isValidNumber($numberProto)) {
+                $this->respondError(400, 'Invalid phone number format');
+            }
+            return $util->format($numberProto, \libphonenumber\PhoneNumberFormat::E164);
+        } catch (\libphonenumber\NumberParseException $e) {
+            $this->respondError(400, 'Invalid phone number format');
+        }
+    }
+
+    /**
      * Send success response
      */
     protected function respondSuccess($data = null, $message = 'Success', $statusCode = 200)
