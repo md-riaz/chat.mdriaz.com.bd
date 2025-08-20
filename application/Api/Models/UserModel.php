@@ -164,7 +164,9 @@ class UserModel extends Model
     }
 
     /**
-     * Search users for adding to conversations
+     * Search users for adding to conversations.
+     *
+     * Uses {@see QueryBuilder::whereNull()} to omit soft-deleted users.
      */
     public static function searchUsers($query, $limit = 10)
     {
@@ -174,7 +176,7 @@ class UserModel extends Model
             fn($user) => $user->toArray(),
             static::query()
                 ->select(['id', 'name', 'username', 'email', 'avatar_url'])
-                ->where([['deleted_at', 'IS', null]])
+                ->whereNull('deleted_at')
                 ->whereRaw('(name LIKE :q OR username LIKE :q OR email LIKE :q)', ['q' => $like])
                 ->limit($limit)
                 ->get()
@@ -241,12 +243,12 @@ class UserModel extends Model
     }
 
     /**
-     * Get user count
+     * Get user count of non-deleted users using the {@see QueryBuilder::whereNull()} helper.
      */
     public static function getUserCount()
     {
         return static::query()
-            ->where([['deleted_at', 'IS', null]])
+            ->whereNull('deleted_at')
             ->count();
     }
 
@@ -298,7 +300,9 @@ class UserModel extends Model
     }
 
     /**
-     * Get recent users for suggestions
+     * Get recent users for suggestions.
+     *
+     * Applies {@see QueryBuilder::whereNull()} to exclude soft-deleted users.
      */
     public static function getRecentUsers($limit = 10)
     {
@@ -306,7 +310,7 @@ class UserModel extends Model
             fn($user) => $user->toArray(),
             static::query()
                 ->select(['id', 'name', 'username', 'email', 'avatar_url', 'created_at'])
-                ->where([['deleted_at', 'IS', null]])
+                ->whereNull('deleted_at')
                 ->orderBy('created_at', 'DESC')
                 ->limit($limit)
                 ->get()
