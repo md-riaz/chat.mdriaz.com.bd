@@ -40,6 +40,14 @@ abstract class Model
         return new QueryBuilder(static::db(), static::$table, static::class);
     }
 
+    protected static function hydrate(array $row): static
+    {
+        $model = new static();
+        $model->attributes = $row;
+        $model->original = $row;
+        return $model;
+    }
+
     public function __get(string $name): mixed
     {
         if (array_key_exists($name, $this->attributes)) {
@@ -298,14 +306,7 @@ abstract class Model
 
         $rows = $db->query("SELECT * FROM {$table}")->fetchAll() ?: [];
 
-        return array_map(function (array $row) {
-            $model = new static();
-            // Hydrate all columns, not only fillable
-            $model->attributes = $row;
-            $model->original = $row;
-
-            return $model;
-        }, $rows);
+        return array_map(fn(array $row) => static::hydrate($row), $rows);
     }
 
     public static function find(int $id): ?static
@@ -319,12 +320,7 @@ abstract class Model
             return null;
         }
 
-        $model = new static();
-        // Hydrate all columns, not only fillable
-        $model->attributes = $row;
-        $model->original = $row;
-
-        return $model;
+        return static::hydrate($row);
     }
 
     public function save(): void
@@ -472,12 +468,7 @@ abstract class Model
         $sql = "SELECT * FROM {$table} {$whereSql}";
         $rows = $db->query($sql, $params)->fetchAll() ?: [];
 
-        return array_map(function (array $row) {
-            $model = new static();
-            $model->attributes = $row; // hydrate all columns
-            $model->original = $row;
-            return $model;
-        }, $rows);
+        return array_map(fn(array $row) => static::hydrate($row), $rows);
     }
 
     /**
@@ -501,10 +492,7 @@ abstract class Model
             return null;
         }
 
-        $model = new static();
-        $model->attributes = $row; // hydrate all columns
-        $model->original = $row;
-        return $model;
+        return static::hydrate($row);
     }
 
     /**

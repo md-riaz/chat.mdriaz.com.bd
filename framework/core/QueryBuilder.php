@@ -110,12 +110,15 @@ class QueryBuilder
 
         $rows = $this->db->query($sql, $params)->fetchAll() ?: [];
 
-        return array_map(function (array $row) {
-            $model = new $this->modelClass();
-            $model->attributes = $row;
-            $model->original = $row;
-            return $model;
-        }, $rows);
+        $hydrator = \Closure::bind(
+            static function (array $row) {
+                return static::hydrate($row);
+            },
+            null,
+            $this->modelClass
+        );
+
+        return array_map($hydrator, $rows);
     }
 
     public function count(): int
