@@ -17,7 +17,7 @@ class Chat extends ApiController
      */
     public function conversations()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $limit = min((int)($_GET['limit'] ?? 20), 100);
         $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
         $lastTimestamp = $_GET['last_timestamp'] ?? null;
@@ -40,7 +40,7 @@ class Chat extends ApiController
      */
     public function sendMessage()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['conversation_id', 'content']);
@@ -104,7 +104,7 @@ class Chat extends ApiController
      */
     public function messages()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 50), 100);
         $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
@@ -140,7 +140,7 @@ class Chat extends ApiController
      */
     public function createConversation()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['type']);
@@ -202,7 +202,7 @@ class Chat extends ApiController
      */
     public function createGroup()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['name', 'participant_ids']);
@@ -267,7 +267,7 @@ class Chat extends ApiController
      */
     public function findConversation()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $username = $_GET['username'] ?? '';
 
         if (empty($username)) {
@@ -296,7 +296,7 @@ class Chat extends ApiController
      */
     public function addReaction()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['message_id', 'emoji']);
@@ -323,7 +323,7 @@ class Chat extends ApiController
      */
     public function markAsRead()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['message_id']);
@@ -346,7 +346,7 @@ class Chat extends ApiController
      */
     public function searchMessages()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $query = $_GET['q'] ?? '';
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 20), 100);
@@ -379,7 +379,7 @@ class Chat extends ApiController
      */
     public function unreadCount()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $totalUnread = ConversationModel::getTotalUnreadCount($user['user_id']);
@@ -401,7 +401,7 @@ class Chat extends ApiController
      */
     public function typingStatus()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $conversationId = $_GET['conversation_id'] ?? null;
 
         if (!$conversationId) {
@@ -449,7 +449,7 @@ class Chat extends ApiController
      */
     public function setTyping()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['conversation_id', 'is_typing']);
@@ -487,7 +487,7 @@ class Chat extends ApiController
      */
     public function onlineUsers()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $conversationId = $_GET['conversation_id'] ?? null;
 
         try {

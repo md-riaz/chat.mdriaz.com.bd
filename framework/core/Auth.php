@@ -22,6 +22,12 @@ class Auth
      */
     public static function checkPermission($section, $controller, $action)
     {
+        // Skip auth for login and register endpoints
+        $section = trim($section, '/\\');
+        if ($section === 'Api' && $controller === 'User' && in_array(strtolower($action), ['login', 'register'])) {
+            return true;
+        }
+
         // Ensure user is authenticated globally
         self::requireAuth();
 

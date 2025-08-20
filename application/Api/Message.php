@@ -15,7 +15,7 @@ class Message extends ApiController
      */
     public function index()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $conversationId = $_GET['conversation_id'] ?? null;
         $search = $_GET['search'] ?? '';
         $limit = min((int)($_GET['limit'] ?? 50), 100);
@@ -45,7 +45,7 @@ class Message extends ApiController
      */
     public function create()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['conversation_id', 'content']);
@@ -110,7 +110,7 @@ class Message extends ApiController
             $this->respondError(400, 'Message ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $message = MessageModel::getMessageWithDetails($id);
@@ -139,7 +139,7 @@ class Message extends ApiController
             $this->respondError(400, 'Message ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['content']);
@@ -183,7 +183,7 @@ class Message extends ApiController
             $this->respondError(400, 'Message ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             // Check if message exists and user is the sender
@@ -221,7 +221,7 @@ class Message extends ApiController
             $this->respondError(400, 'Message ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['emoji']);
@@ -263,7 +263,7 @@ class Message extends ApiController
             $this->respondError(400, 'Message ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             // Check if message exists and user has access
@@ -293,7 +293,7 @@ class Message extends ApiController
      */
     public function upload()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
             $this->respondError(400, 'No valid file uploaded');
@@ -378,7 +378,7 @@ class Message extends ApiController
      */
     public function search()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $query = $_GET['q'] ?? '';
         $limit = min((int)($_GET['limit'] ?? 50), 100);
         $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;

@@ -16,8 +16,6 @@ class User extends ApiController
     {
         $search = $_GET['search'] ?? '';
 
-        $this->authenticate();
-
         // Build search conditions
         $whereClause = "WHERE deleted_at IS NULL";
         $params = [];
@@ -53,8 +51,6 @@ class User extends ApiController
             $this->respondError(400, 'User ID is required');
         }
 
-        $this->authenticate();
-
         $user = UserModel::findById($id);
 
         if (!$user) {
@@ -72,8 +68,6 @@ class User extends ApiController
         if (!$username) {
             $this->respondError(400, 'Username is required');
         }
-
-        $this->authenticate();
 
         $user = UserModel::getUserByUsername($username);
 
@@ -93,7 +87,7 @@ class User extends ApiController
             $this->respondError(400, 'User ID is required');
         }
 
-        $currentUser = $this->authenticate();
+        $currentUser = $this->currentUser;
         $data = $this->getJsonInput();
 
         // Check if user can update this profile (own profile or admin)
@@ -147,7 +141,7 @@ class User extends ApiController
             $this->respondError(400, 'User ID is required');
         }
 
-        $currentUser = $this->authenticate();
+        $currentUser = $this->currentUser;
 
         // Check if user can delete this profile (own profile or admin)
         if ($currentUser['user_id'] != $id) {
@@ -185,7 +179,7 @@ class User extends ApiController
             $this->respondError(400, 'User ID is required');
         }
 
-        $currentUser = $this->authenticate();
+        $currentUser = $this->currentUser;
 
         // Check if user can update this profile
         if ($currentUser['user_id'] != $id) {
@@ -263,8 +257,6 @@ class User extends ApiController
             $this->respondError(400, 'Search query is required');
         }
 
-        $this->authenticate();
-
         $users = UserModel::searchUsers($query, $limit);
 
         $this->respondSuccess($users, 'Users found successfully');
@@ -275,7 +267,7 @@ class User extends ApiController
      */
     public function me()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         $userInfo = UserModel::findById($user['user_id']);
 
@@ -401,7 +393,7 @@ class User extends ApiController
      */
     public function logout()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $token = $this->getAuthToken();
 
         if ($token) {
@@ -416,7 +408,7 @@ class User extends ApiController
      */
     public function refresh()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         // Create new token
         $newToken = AuthTokenModel::createToken(

@@ -13,7 +13,7 @@ class Device extends ApiController
      */
     public function register()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $this->validateRequired($data, ['device_id', 'platform']);
@@ -43,7 +43,7 @@ class Device extends ApiController
      */
     public function index()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $userModel = UserModel::find($user['user_id']);
@@ -64,7 +64,7 @@ class Device extends ApiController
             $this->respondError(400, 'Device ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         // Check if device belongs to user
@@ -118,7 +118,7 @@ class Device extends ApiController
             $this->respondError(400, 'Device ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $result = DeviceModel::removeDevice($user['user_id'], $deviceId);
@@ -142,7 +142,7 @@ class Device extends ApiController
             $this->respondError(400, 'Device ID is required');
         }
 
-        $user = $this->authenticate();
+        $user = $this->currentUser;
 
         try {
             $result = DeviceModel::updateLastActive($user['user_id'], $deviceId);
@@ -164,7 +164,7 @@ class Device extends ApiController
      */
     public function testNotification()
     {
-        $user = $this->authenticate();
+        $user = $this->currentUser;
         $data = $this->getJsonInput();
 
         $deviceId = $data['device_id'] ?? null;
