@@ -74,28 +74,47 @@ abstract class Model
         }
     }
 
+    /**
+     * Convert the model's attributes and loaded relations to an array.
+     *
+     * Nested {@see Model} instances and {@see Collection} objects are
+     * recursively serialized using their respective {@see toArray()} methods.
+     * Any foreign key whose name matches the relation with an `_id` suffix is
+     * removed from the resulting array.
+     *
+     * @return array<string,mixed>
+     */
     public function toArray(): array
     {
         $data = $this->attributes;
 
-        foreach ($this->relations as $key => $relation) {
-            if ($relation instanceof self) {
-                $data[$key] = $relation->toArray();
-            } elseif ($relation instanceof Collection) {
-                $data[$key] = $relation->toArray();
-            } elseif (is_array($relation)) {
-                $data[$key] = $relation;
-            } else {
-                $data[$key] = $relation;
-            }
+        array_walk(
+            $this->relations,
+            function ($relation, string $key) use (&$data): void {
+                $data[$key] = match (true) {
+                    $relation instanceof Model,
+                    $relation instanceof Collection => $relation->toArray(),
+                    default => $relation,
+                };
 
-            $foreignKey = $key . '_id';
-            if (array_key_exists($foreignKey, $data)) {
-                unset($data[$foreignKey]);
+                $this->removeForeignKey($data, $key);
             }
-        }
+        );
 
         return $data;
+    }
+
+    /**
+     * Remove the foreign key corresponding to a relation from the data array.
+     *
+     * @param array<string,mixed> $data
+     */
+    private function removeForeignKey(array &$data, string $relationKey): void
+    {
+        $foreignKey = $relationKey . '_id';
+        if (array_key_exists($foreignKey, $data)) {
+            unset($data[$foreignKey]);
+        }
     }
 
     public static function getPrimaryKey(): string
