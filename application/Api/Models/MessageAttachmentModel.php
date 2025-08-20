@@ -79,7 +79,7 @@ class MessageAttachmentModel extends Model
             return [];
         }
         $attachments = $message->attachments;
-        return array_map(fn($a) => $a->toArray(), $attachments);
+        return $attachments->toArray();
     }
 
     public static function getAttachmentById($attachmentId)

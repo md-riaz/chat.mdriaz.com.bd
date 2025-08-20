@@ -6,6 +6,7 @@ namespace Framework\Core;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Framework\Core\Collection;
 
 abstract class Model
 {
@@ -80,11 +81,10 @@ abstract class Model
         foreach ($this->relations as $key => $relation) {
             if ($relation instanceof self) {
                 $data[$key] = $relation->toArray();
+            } elseif ($relation instanceof Collection) {
+                $data[$key] = $relation->toArray();
             } elseif (is_array($relation)) {
-                $data[$key] = array_map(
-                    fn($item) => $item instanceof self ? $item->toArray() : $item,
-                    $relation
-                );
+                $data[$key] = $relation;
             } else {
                 $data[$key] = $relation;
             }
@@ -110,16 +110,17 @@ abstract class Model
         return $snake . '_id';
     }
 
-    public function hasMany(string $related, ?string $foreignKey = null, ?string $localKey = null): array
+    public function hasMany(string $related, ?string $foreignKey = null, ?string $localKey = null): Collection
     {
         $foreignKey = $foreignKey ?? $this->foreignKeyName(static::class);
         $localKey = $localKey ?? static::$primaryKey;
         $value = $this->attributes[$localKey] ?? null;
         if ($value === null) {
-            return [];
+            return new Collection();
         }
         /** @var class-string<Model> $related */
-        return $related::where([[$foreignKey, '=', $value]]);
+        $results = $related::where([[$foreignKey, '=', $value]]);
+        return new Collection($results);
     }
 
     public function hasOne(string $related, ?string $foreignKey = null, ?string $localKey = null): ?Model
@@ -148,10 +149,10 @@ abstract class Model
         string $localKey = 'id',
         string $relatedKey = 'id',
         bool $withPivot = false
-    ): array {
+    ): Collection {
         $localValue = $this->attributes[$localKey] ?? null;
         if ($localValue === null) {
-            return [];
+            return new Collection();
         }
 
         $db = static::db();
@@ -163,7 +164,7 @@ abstract class Model
             )
             ->fetchAll();
         if (!$pivotRows) {
-            return [];
+            return new Collection();
         }
 
         $relatedIds = array_unique(array_column($pivotRows, $relatedPivotKey));
@@ -193,7 +194,7 @@ abstract class Model
             $results[] = $model;
         }
 
-        return $results;
+        return new Collection($results);
     }
 
     public static function all(): array

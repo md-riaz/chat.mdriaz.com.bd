@@ -99,15 +99,17 @@ class ConversationParticipantModel extends Model
             return [];
         }
 
-        $participants = $conversation->participants();
-        return array_map(function ($user) {
-            $data = $user->toArray();
-            $pivot = $user->_pivot ?? [];
-            $data['role'] = $pivot['role'] ?? null;
-            $data['joined_at'] = $pivot['joined_at'] ?? null;
-            $data['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
-            return $data;
-        }, $participants);
+        $participants = $conversation->participants()->toArray();
+        $results = [];
+        foreach ($participants as $user) {
+            $pivot = $user['_pivot'] ?? [];
+            $user['role'] = $pivot['role'] ?? null;
+            $user['joined_at'] = $pivot['joined_at'] ?? null;
+            $user['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
+            unset($user['_pivot']);
+            $results[] = $user;
+        }
+        return $results;
     }
 
     public static function getParticipantRole($conversationId, $userId)

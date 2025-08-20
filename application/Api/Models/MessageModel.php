@@ -3,6 +3,7 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use Framework\Core\Collection;
 
 class MessageModel extends Model
 {
@@ -15,7 +16,7 @@ class MessageModel extends Model
         return $this->belongsTo(UserModel::class, 'sender_id');
     }
 
-    public function attachments(): array
+    public function attachments(): Collection
     {
         return $this->hasMany(MessageAttachmentModel::class, 'message_id');
     }
