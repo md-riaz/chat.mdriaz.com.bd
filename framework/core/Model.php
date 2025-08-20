@@ -508,6 +508,16 @@ abstract class Model
                     $parts[] = "{$col} IN ({$inList})";
                     break;
                 }
+                case 'IS': {
+                    if ($val === null) {
+                        $parts[] = "{$col} IS NULL";
+                        break;
+                    }
+                    $paramName = ':p' . $paramCounter++;
+                    $parts[] = "{$col} IS {$paramName}";
+                    $params[ltrim($paramName, ':')] = $val;
+                    break;
+                }
                 default:
                     throw new InvalidArgumentException("Unsupported operator: {$op}");
             }

@@ -218,19 +218,10 @@ class UserModel extends Model
         if (empty($userIds)) {
             return [];
         }
-        $db = static::db();
-        $placeholders = implode(', ', array_fill(0, count($userIds), '?'));
-        $rows = $db->query(
-            "SELECT * FROM users WHERE id IN ({$placeholders}) AND deleted_at IS NULL",
-            $userIds
-        )->fetchAll() ?: [];
-
-        return array_map(function (array $row) {
-            $model = new static();
-            $model->attributes = $row;
-            $model->original = $row;
-            return $model;
-        }, $rows);
+        return static::where([
+            ['id', 'IN', $userIds],
+            ['deleted_at', 'IS', null],
+        ]);
     }
 
     /**
