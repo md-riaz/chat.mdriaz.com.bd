@@ -20,6 +20,11 @@ class MessageModel extends Model
         return $this->hasMany(MessageAttachmentModel::class, 'message_id');
     }
 
+    public function conversation(): ?ConversationModel
+    {
+        return $this->belongsTo(ConversationModel::class, 'conversation_id');
+    }
+
     public static function createMessage($conversationId, $senderId, $content, $messageType = 'text', $parentId = null)
     {
         $message = new static([

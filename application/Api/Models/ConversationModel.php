@@ -3,11 +3,37 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use App\Api\Models\MessageModel;
+use App\Api\Models\UserModel;
+
 class ConversationModel extends Model
 {
     protected static string $table = 'conversations';
     protected array $fillable = ['title', 'is_group', 'created_by', 'created_at'];
     protected bool $timestamps = false;
+
+    public function messages(): array
+    {
+        return $this->hasMany(MessageModel::class, 'conversation_id');
+    }
+
+    public function participants(): array
+    {
+        return $this->belongsToMany(
+            UserModel::class,
+            'conversation_participants',
+            'conversation_id',
+            'user_id',
+            'id',
+            'id',
+            true
+        );
+    }
+
+    public function creator(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class, 'created_by');
+    }
 
     /**
      * Create a new conversation
@@ -117,15 +143,20 @@ class ConversationModel extends Model
      */
     public static function getConversationParticipants($conversationId)
     {
-        $db = static::db();
+        $conversation = static::find((int) $conversationId);
+        if (!$conversation) {
+            return [];
+        }
 
-        $sql = "SELECT cp.*, u.name, u.username, u.avatar_url, u.email
-                FROM conversation_participants cp
-                JOIN users u ON cp.user_id = u.id
-                WHERE cp.conversation_id = ?
-                ORDER BY cp.joined_at";
-
-        return $db->query($sql, [$conversationId])->fetchAll();
+        $participants = $conversation->participants();
+        return array_map(function ($user) {
+            $data = $user->toArray();
+            $pivot = $user->_pivot ?? [];
+            $data['role'] = $pivot['role'] ?? null;
+            $data['joined_at'] = $pivot['joined_at'] ?? null;
+            $data['last_read_message_id'] = $pivot['last_read_message_id'] ?? null;
+            return $data;
+        }, $participants);
     }
 
     /**

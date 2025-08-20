@@ -3,6 +3,7 @@
 namespace App\Api\Models;
 
 use Framework\Core\Model;
+use App\Api\Models\UserModel;
 
 class DeviceModel extends Model
 {
@@ -11,6 +12,11 @@ class DeviceModel extends Model
         'user_id', 'device_id', 'platform', 'fcm_token', 'device_name',
         'app_version', 'os_version', 'last_active_at', 'created_at', 'updated_at'
     ];
+
+    public function user(): ?UserModel
+    {
+        return $this->belongsTo(UserModel::class);
+    }
 
     public static function registerDevice($userId, $deviceId, $platform, $fcmToken = null, $deviceName = null, $appVersion = null, $osVersion = null)
     {

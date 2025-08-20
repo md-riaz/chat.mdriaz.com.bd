@@ -46,7 +46,8 @@ class Device extends ApiController
         $user = $this->authenticate();
 
         try {
-            $devices = DeviceModel::getUserDevices($user['user_id']);
+            $userModel = UserModel::find($user['user_id']);
+            $devices = $userModel ? array_map(fn($d) => $d->toArray(), $userModel->devices()) : [];
 
             $this->respondSuccess($devices, 'Devices retrieved successfully');
         } catch (\Exception $e) {
