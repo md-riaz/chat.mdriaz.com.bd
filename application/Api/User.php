@@ -23,9 +23,23 @@ class User extends ApiController
         $params = [];
 
         if (!empty($search)) {
-            $whereClause .= " AND (name LIKE ? OR email LIKE ? OR username LIKE ?)";
-            $searchTerm = "%{$search}%";
-            $params = [$searchTerm, $searchTerm, $searchTerm];
+            $words = preg_split('/\s+/', trim($search));
+            $conditions = [];
+
+            foreach ($words as $word) {
+                if ($word === '') {
+                    continue;
+                }
+                $conditions[] = '(name LIKE ? OR email LIKE ? OR username LIKE ?)';
+                $searchTerm = "%{$word}%";
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+                $params[] = $searchTerm;
+            }
+
+            if ($conditions) {
+                $whereClause .= ' AND (' . implode(' OR ', $conditions) . ')';
+            }
         }
 
         // Use dataQuery for automatic pagination

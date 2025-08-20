@@ -172,16 +172,34 @@ class UserModel extends Model
      */
     public static function searchUsers($query, $limit = 10)
     {
-        $like = "%$query%";
+        $words = preg_split('/\s+/', trim($query));
+
+        $builder = static::query()
+            ->select(['id', 'name', 'username', 'email', 'avatar_url'])
+            ->whereNull('deleted_at');
+
+        if ($words) {
+            $conditions = [];
+            $bindings = [];
+
+            foreach ($words as $i => $word) {
+                if ($word === '') {
+                    continue;
+                }
+
+                $param = 'q' . $i;
+                $conditions[] = "(name LIKE :$param OR username LIKE :$param OR email LIKE :$param)";
+                $bindings[$param] = '%' . $word . '%';
+            }
+
+            if ($conditions) {
+                $builder->whereRaw(implode(' OR ', $conditions), $bindings);
+            }
+        }
 
         return array_map(
             fn($user) => $user->toArray(),
-            static::query()
-                ->select(['id', 'name', 'username', 'email', 'avatar_url'])
-                ->whereNull('deleted_at')
-                ->whereRaw('(name LIKE :q OR username LIKE :q OR email LIKE :q)', ['q' => $like])
-                ->limit($limit)
-                ->get()
+            $builder->limit($limit)->get()
         );
     }
 
