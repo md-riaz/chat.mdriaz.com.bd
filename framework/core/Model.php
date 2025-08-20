@@ -634,53 +634,115 @@ abstract class Model
             }
 
             $op = strtoupper(trim((string) $op));
-            switch ($op) {
-                case '=':
-                case '!=':
-                case '<':
-                case '>':
-                case '<=':
-                case '>=':
-                case 'LIKE': {
-                    $paramName = ':p' . $paramCounter++;
-                    $parts[] = "{$col} {$op} {$paramName}";
-                    $params[ltrim($paramName, ':')] = $val;
-                    break;
-                }
-                case 'IN': {
-                    if (!is_array($val) || $val === []) {
-                        $parts[] = '1=0';
-                        break;
-                    }
-                    $phs = [];
-                    foreach ($val as $v) {
-                        $paramName = ':p' . $paramCounter++;
-                        $phs[] = $paramName;
-                        $params[ltrim($paramName, ':')] = $v;
-                    }
-                    $parts[] = "{$col} IN (" . implode(', ', $phs) . ')';
-                    break;
-                }
-                case 'IS': {
-                    if ($val === null) {
-                        $parts[] = "{$col} IS NULL";
-                        break;
-                    }
-                    $paramName = ':p' . $paramCounter++;
-                    $parts[] = "{$col} IS {$paramName}";
-                    $params[ltrim($paramName, ':')] = $val;
-                    break;
-                }
-                case 'IS NULL':
-                case 'IS NOT NULL': {
-                    $parts[] = "{$col} {$op}";
-                    break;
-                }
-                default:
-                    throw new InvalidArgumentException("Unsupported operator: {$op}");
+            $handlers = [
+                '=' => 'compileSimple',
+                '!=' => 'compileSimple',
+                '<' => 'compileSimple',
+                '>' => 'compileSimple',
+                '<=' => 'compileSimple',
+                '>=' => 'compileSimple',
+                'LIKE' => 'compileSimple',
+                'IN' => 'compileIn',
+                'IS' => 'compileIs',
+                'IS NULL' => 'compileNull',
+                'IS NOT NULL' => 'compileNull',
+            ];
+
+            if (!isset($handlers[$op])) {
+                throw new InvalidArgumentException("Unsupported operator: {$op}");
             }
+
+            $method = $handlers[$op];
+            $parts[] = static::$method($col, $op, $val, $params, $paramCounter);
         }
 
         return implode(" {$boolean} ", $parts);
+    }
+
+    /**
+     * Compile basic comparison operators into a parameterized SQL snippet.
+     *
+     * Supported operators: =, !=, <, >, <=, >=, LIKE
+     *
+     * Examples:
+     *  compileSimple('age', '>=', 18, $params, $i) => "age >= :p0"
+     *  compileSimple('name', 'LIKE', '%foo%', $params, $i) => "name LIKE :p1"
+     */
+    private static function compileSimple(
+        string $col,
+        string $op,
+        mixed $val,
+        array &$params,
+        int &$paramCounter
+    ): string {
+        $paramName = ':p' . $paramCounter++;
+        $params[ltrim($paramName, ':')] = $val;
+        return "{$col} {$op} {$paramName}";
+    }
+
+    /**
+     * Compile an IN clause with a list of values.
+     *
+     * Example:
+     *  compileIn('id', 'IN', [1,2], $params, $i) => "id IN (:p0, :p1)"
+     */
+    private static function compileIn(
+        string $col,
+        string $op,
+        mixed $val,
+        array &$params,
+        int &$paramCounter
+    ): string {
+        if (!is_array($val) || $val === []) {
+            return '1=0';
+        }
+        $placeholders = [];
+        foreach ($val as $v) {
+            $paramName = ':p' . $paramCounter++;
+            $placeholders[] = $paramName;
+            $params[ltrim($paramName, ':')] = $v;
+        }
+        return "{$col} IN (" . implode(', ', $placeholders) . ')';
+    }
+
+    /**
+     * Compile the IS operator which also handles NULL values.
+     *
+     * Examples:
+     *  compileIs('deleted_at', 'IS', null, $params, $i) => "deleted_at IS NULL"
+     *  compileIs('flag', 'IS', true, $params, $i) => "flag IS :p0"
+     */
+    private static function compileIs(
+        string $col,
+        string $op,
+        mixed $val,
+        array &$params,
+        int &$paramCounter
+    ): string {
+        if ($val === null) {
+            return "{$col} IS NULL";
+        }
+        $paramName = ':p' . $paramCounter++;
+        $params[ltrim($paramName, ':')] = $val;
+        return "{$col} IS {$paramName}";
+    }
+
+    /**
+     * Compile explicit null checks.
+     *
+     * Supported operators: IS NULL, IS NOT NULL
+     *
+     * Example:
+     *  compileNull('deleted_at', 'IS NOT NULL', null, $params, $i)
+     *      => "deleted_at IS NOT NULL"
+     */
+    private static function compileNull(
+        string $col,
+        string $op,
+        mixed $val,
+        array &$params,
+        int &$paramCounter
+    ): string {
+        return "{$col} {$op}";
     }
 }
