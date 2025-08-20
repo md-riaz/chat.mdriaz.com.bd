@@ -18,19 +18,14 @@ class Chat extends ApiController
     public function conversations()
     {
         $user = $this->authenticate();
-        $page = (int)($_GET['page'] ?? 1);
-        $perPage = min((int)($_GET['per_page'] ?? 20), 100);
+        $limit = min((int)($_GET['limit'] ?? 20), 100);
+        $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+        $lastTimestamp = $_GET['last_timestamp'] ?? null;
 
         try {
-            $result = ConversationModel::getUserConversationsPaginated($user['user_id'], $page, $perPage);
+            $items = ConversationModel::getUserConversationsPaginated($user['user_id'], $limit, $lastId, $lastTimestamp);
 
-            $this->respondPaginated(
-                $result['items'],
-                $result['total'],
-                $page,
-                $perPage,
-                'Conversations retrieved successfully'
-            );
+            $this->respondCursor($items, $limit, 'Conversations retrieved successfully');
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
                 'user_id' => $user['user_id'],
@@ -112,7 +107,8 @@ class Chat extends ApiController
         $user = $this->authenticate();
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 50), 100);
-        $offset = (int)($_GET['offset'] ?? 0);
+        $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+        $lastTimestamp = $_GET['last_timestamp'] ?? null;
         if ($limit <= 0) {
             $limit = 50;
         }
@@ -127,11 +123,9 @@ class Chat extends ApiController
         }
 
         try {
-            $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $offset);
-            $total = MessageModel::getConversationMessageCount($conversationId);
-            $page = (int) floor($offset / $limit) + 1;
+            $messages = MessageModel::getConversationMessagesWithDetails($conversationId, $limit, $lastId, $lastTimestamp);
 
-            $this->respondPaginated($messages, $total, $page, $limit, 'Messages retrieved successfully');
+            $this->respondCursor($messages, $limit, 'Messages retrieved successfully');
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
                 'user_id' => $user['user_id'],
@@ -262,7 +256,8 @@ class Chat extends ApiController
         $query = $_GET['q'] ?? '';
         $conversationId = $_GET['conversation_id'] ?? null;
         $limit = min((int)($_GET['limit'] ?? 20), 100);
-        $offset = (int)($_GET['offset'] ?? 0);
+        $lastId = isset($_GET['last_id']) ? (int) $_GET['last_id'] : null;
+        $lastTimestamp = $_GET['last_timestamp'] ?? null;
 
         if (empty($query)) {
             $this->respondError(400, 'Search query is required');
@@ -270,14 +265,12 @@ class Chat extends ApiController
 
         try {
             if ($conversationId) {
-                // Search within specific conversation - use Message model method
-                $messages = MessageModel::searchConversationMessages($user['user_id'], $conversationId, $query, $limit, $offset);
+                $messages = MessageModel::searchConversationMessagesCursor($user['user_id'], $conversationId, $query, $limit, $lastId, $lastTimestamp);
             } else {
-                // Search across all user's conversations
-                $messages = MessageModel::searchUserMessages($user['user_id'], $query, $limit, $offset);
+                $messages = MessageModel::searchUserMessagesCursor($user['user_id'], $query, $limit, $lastId, $lastTimestamp);
             }
 
-            $this->respondSuccess($messages, 'Messages found successfully');
+            $this->respondCursor($messages, $limit, 'Messages found successfully');
         } catch (\Exception $e) {
             Util::log($e->getMessage(), [
                 'user_id' => $user['user_id'],

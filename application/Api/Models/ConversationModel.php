@@ -164,19 +164,23 @@ class ConversationModel extends Model
     /**
      * Get user's conversations with pagination
      */
-    public static function getUserConversationsPaginated($userId, $page = 1, $perPage = 20)
+    public static function getUserConversationsPaginated($userId, $limit = 20, $lastId = null, $lastTimestamp = null)
     {
         $db = static::db();
 
-        $offset = ($page - 1) * $perPage;
+        $conditions = "WHERE cp.user_id = ?";
+        $params = [$userId];
 
-        // Get total conversation count for user
-        $total = $db->query(
-            "SELECT COUNT(*) as count FROM conversations c JOIN conversation_participants cp ON c.id = cp.conversation_id WHERE cp.user_id = ?",
-            [$userId]
-        )->fetchArray()['count'];
+        if ($lastTimestamp !== null) {
+            $conditions .= " AND (c.created_at < ? OR (c.created_at = ? AND c.id < ?))";
+            $params[] = $lastTimestamp;
+            $params[] = $lastTimestamp;
+            $params[] = $lastId ?? 0;
+        } elseif ($lastId !== null) {
+            $conditions .= " AND c.id < ?";
+            $params[] = $lastId;
+        }
 
-        // Get paginated conversations
         $sql = "SELECT c.*,
                        cp.last_read_message_id,
                        cp.role,
@@ -186,21 +190,20 @@ class ConversationModel extends Model
                        (SELECT u.name FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_sender_name
                 FROM conversations c
                 JOIN conversation_participants cp ON c.id = cp.conversation_id
-                WHERE cp.user_id = ?
-                ORDER BY last_message_time IS NULL, last_message_time DESC
-                LIMIT ? OFFSET ?";
+                $conditions
+                ORDER BY c.created_at DESC, c.id DESC
+                LIMIT ?";
 
-        $items = $db->query($sql, [$userId, $perPage, $offset])->fetchAll();
+        $params[] = $limit;
+
+        $items = $db->query($sql, $params)->fetchAll();
 
         // Append unread counts
         foreach ($items as &$item) {
             $item['unread_count'] = static::getUnreadCount($item['id'], $userId);
         }
 
-        return [
-            'items' => $items,
-            'total' => $total,
-        ];
+        return $items;
     }
 
     /**
