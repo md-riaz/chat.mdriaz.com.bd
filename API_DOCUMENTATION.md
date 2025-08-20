@@ -74,10 +74,12 @@ Register a new user.
   "name": "John Doe",
   "email": "user@example.com",
   "username": "johndoe",
-  "password": "password123",
-  "avatar_url": "/uploads/avatars/avatar.jpg"
+  "password": "password123"
 }
 ```
+
+Upload an avatar after registration using `PUT /api/user/{id}` or
+`POST /api/user/{id}/uploadAvatar`.
 
 ### POST /api/user/logout
 
@@ -934,13 +936,28 @@ Check WebSocket server status.
 
 ## WebSocket Integration
 
-The chat system also includes a WebSocket server for real-time messaging. WebSocket events include:
+The chat system also includes a WebSocket server for real-time messaging.
 
-- **auth** - Authenticate WebSocket connection
+### Connecting
+
+Clients connect to `ws://localhost:8080?token=YOUR_ACCESS_TOKEN`. The `token` query
+parameter must contain a valid access token. Invalid tokens result in an
+`authorization_error` message and the connection being closed.
+
+### Heartbeats
+
+The server sends `{"type":"ping"}` every 30 seconds. Clients must reply with
+`{"type":"pong"}` within 60 seconds to keep the connection alive.
+
+### Events
+
+After authentication, the server pushes JSON events for the current user:
+
 - **message** - Send/receive messages
 - **typing** - Typing indicators
 - **reaction** - Message reactions
 - **user_status** - User online/offline status
+- **subscription_error** - Indicates a server-side subscription issue
 
 WebSocket server runs on `ws://localhost:8080` (configurable).
 

@@ -358,8 +358,7 @@ class User extends ApiController
                 $data['name'],
                 $data['email'],
                 $data['username'],
-                $data['password'],
-                $data['avatar_url'] ?? null
+                $data['password']
             );
 
             $this->db->commit();
