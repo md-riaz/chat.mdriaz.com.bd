@@ -263,6 +263,171 @@ class Chat extends ApiController
     }
 
     /**
+     * POST /api/chat/add-participants - Add participants to a group conversation
+     */
+    public function addParticipants()
+    {
+        $user = $this->currentUser;
+        $data = $this->getJsonInput();
+
+        $this->validateRequired($data, ['conversation_id', 'user_ids']);
+
+        $conversationId = $data['conversation_id'];
+
+        // Only admins can add participants
+        if (!ConversationParticipantModel::isAdmin($conversationId, $user['user_id'])) {
+            $this->respondError(403, 'Only admins can add participants');
+        }
+
+        if (!is_array($data['user_ids']) || empty($data['user_ids'])) {
+            $this->respondError(400, 'At least one user ID is required');
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            $addedUsers = [];
+            foreach ($data['user_ids'] as $userId) {
+                if (!ConversationParticipantModel::isParticipant($conversationId, $userId)) {
+                    ConversationParticipantModel::addParticipant($conversationId, $userId, false);
+                    $addedUsers[] = $userId;
+                }
+            }
+
+            $this->db->commit();
+
+            // Publish update event to all participants using user channels
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = RedisService::getInstance();
+                if ($redis->isConnected() && !empty($addedUsers)) {
+                    $conversation = ConversationModel::getConversationById($conversationId);
+                    $participants = ConversationModel::getConversationParticipants($conversationId);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $conversationId,
+                            'type' => 'conversation_updated',
+                            'payload' => $conversation
+                        ]));
+                    }
+                }
+            }
+
+            $this->respondSuccess([
+                'added_users' => $addedUsers,
+                'total_added' => count($addedUsers)
+            ], 'Participants added successfully');
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/add-participants'
+            ]);
+            $this->respondError(500, 'Failed to add participants');
+        }
+    }
+
+    /**
+     * POST /api/chat/remove-participant - Remove participant from a group conversation
+     */
+    public function removeParticipant()
+    {
+        $user = $this->currentUser;
+        $data = $this->getJsonInput();
+
+        $this->validateRequired($data, ['conversation_id', 'user_id']);
+
+        $conversationId = $data['conversation_id'];
+        $userId = $data['user_id'];
+
+        // Check if current user is admin or removing themselves
+        if (!ConversationParticipantModel::isAdmin($conversationId, $user['user_id']) && $user['user_id'] != $userId) {
+            $this->respondError(403, 'You can only remove yourself or you must be an admin');
+        }
+
+        try {
+            $result = ConversationParticipantModel::removeParticipant($conversationId, $userId);
+
+            if ($result) {
+                // Publish update event to remaining participants and notify removed user
+                if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                    $redis = RedisService::getInstance();
+                    if ($redis->isConnected()) {
+                        $conversation = ConversationModel::getConversationById($conversationId);
+                        $participants = ConversationModel::getConversationParticipants($conversationId);
+                        foreach ($participants as $participant) {
+                            $redis->publish('user:' . $participant['user_id'], json_encode([
+                                'conversation_id' => $conversationId,
+                                'type' => 'conversation_updated',
+                                'payload' => $conversation
+                            ]));
+                        }
+                        $redis->publish('user:' . $userId, json_encode([
+                            'conversation_id' => $conversationId,
+                            'type' => 'conversation_removed',
+                            'payload' => ['conversation_id' => $conversationId]
+                        ]));
+                    }
+                }
+
+                $this->respondSuccess(null, 'Participant removed successfully');
+            } else {
+                $this->respondError(404, 'Participant not found in conversation');
+            }
+        } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/remove-participant'
+            ]);
+            $this->respondError(500, 'Failed to remove participant');
+        }
+    }
+
+    /**
+     * POST /api/chat/rename-group - Rename a group conversation
+     */
+    public function renameGroup()
+    {
+        $user = $this->currentUser;
+        $data = $this->getJsonInput();
+
+        $this->validateRequired($data, ['conversation_id', 'name']);
+
+        $conversationId = $data['conversation_id'];
+
+        if (!ConversationParticipantModel::isAdmin($conversationId, $user['user_id'])) {
+            $this->respondError(403, 'Only admins can rename the group');
+        }
+
+        try {
+            ConversationModel::updateConversation($conversationId, ['title' => $data['name']]);
+
+            // Publish update event to all participants
+            if (class_exists('\\App\\Api\\Services\\RedisService')) {
+                $redis = RedisService::getInstance();
+                if ($redis->isConnected()) {
+                    $conversation = ConversationModel::getConversationById($conversationId);
+                    $participants = ConversationModel::getConversationParticipants($conversationId);
+                    foreach ($participants as $participant) {
+                        $redis->publish('user:' . $participant['user_id'], json_encode([
+                            'conversation_id' => $conversationId,
+                            'type' => 'conversation_updated',
+                            'payload' => $conversation
+                        ]));
+                    }
+                }
+            }
+
+            $this->respondSuccess(null, 'Group renamed successfully');
+        } catch (\Exception $e) {
+            Util::log($e->getMessage(), [
+                'user_id' => $user['user_id'],
+                'endpoint' => '/api/chat/rename-group'
+            ]);
+            $this->respondError(500, 'Failed to rename group');
+        }
+    }
+
+    /**
      * GET /api/chat/find-conversation - Find direct conversation by username
      */
     public function findConversation()
